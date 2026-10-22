@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { listClinicDoctors, loadClinicAccounts, readClinicSession } from "@/lib/auth";
 import { createAppointmentActionToken, createFollowupTicket, escapeHtml } from "@/lib/followups";
 import { airtableRequest, COL, saveAirtableRecord } from "@/lib/airtable";
+import { runClinicAgentTask } from "@/lib/adk-service";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const appointmentId = typeof body.appointmentId === "string" ? body.appointmentId.trim() : "";
+    const notifyDoctor = Boolean(body.notifyDoctor);
 
     // 1. Fetch fresh record details from Airtable
     let airtableFields: Record<string, any> = {};
@@ -154,112 +156,81 @@ export async function POST(request: Request) {
     } else {
       emailSubject = `Clinic Desk · ${isOnline ? "Telehealth Consultation" : "In-Person Consultation"} Confirmed · ${name} with ${doctor} · ${date}`;
       emailHtml = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; color: #1e293b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-          <!-- Header Banner -->
-          <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 28px 24px; color: #ffffff; text-align: center;">
-            <h1 style="margin: 0 0 6px 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em;">Clinic Desk Healthcare</h1>
-            <p style="margin: 0; font-size: 14px; opacity: 0.95; font-weight: 400;">Compassionate Medical Care & Consultation</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f172a; border-radius: 16px; padding: 20px; color: #f8fafc;">
+          <!-- Chat Header -->
+          <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 16px;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%); display: inline-flex; align-items: center; justify-content: center; font-size: 20px; color: #ffffff; text-align: center; line-height: 40px;">
+              🩺
+            </div>
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #ffffff; margin-bottom: 2px;">
+                ${safeDoctor}
+              </div>
+              <div style="font-size: 12px; color: #94a3b8;">
+                Consultant Physician · Clinic Desk Live Connect
+              </div>
+            </div>
           </div>
 
-          <div style="padding: 28px 24px;">
-            <!-- Kindful Opening Message -->
-            <p style="font-size: 16px; margin: 0 0 16px 0;">Dear <strong>${safeName}</strong>,</p>
-            <p style="font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 20px 0;">
-              We hope this message finds you in good health and peaceful spirits. It is our pleasure to confirm that your consultation with <strong>${safeDoctor}</strong> has been successfully scheduled and securely recorded in our clinic care registry.
+          <!-- Chat Message Bubble -->
+          <div style="background: #1e293b; border: 1px solid #334155; border-radius: 14px; border-top-left-radius: 4px; padding: 16px; color: #f1f5f9; font-size: 14px; line-height: 1.5; margin-bottom: 12px;">
+            <p style="margin: 0 0 10px 0; font-size: 14.5px;">
+              Hello <strong>${safeName}</strong>! Your consultation is confirmed. Here is your appointment card:
             </p>
 
-            <!-- Consultation Details Card -->
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 0 0 24px 0;">
-              <h3 style="margin: 0 0 14px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 700;">Consultation Summary</h3>
-              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <tbody>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748b; width: 140px;">Patient:</td>
-                    <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${safeName}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748b;">Attending Doctor:</td>
-                    <td style="padding: 6px 0; font-weight: 600; color: #0d9488;">${safeDoctor}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748b;">Date:</td>
-                    <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${safeDate}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748b;">Time Slot:</td>
-                    <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${safeTime}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748b;">Consultation Mode:</td>
-                    <td style="padding: 6px 0; font-weight: 600; color: ${isOnline ? "#0284c7" : "#059669"};">
-                      ${isOnline ? "Online Telehealth Consultation" : "In-Person Clinic Visit"}
-                    </td>
-                  </tr>
-                  ${phone ? `<tr><td style="padding: 6px 0; color: #64748b;">Contact Phone:</td><td style="padding: 6px 0; color: #0f172a;">${escapeHtml(phone)}</td></tr>` : ""}
-                  ${bloodGroup ? `<tr><td style="padding: 6px 0; color: #64748b;">Blood Group:</td><td style="padding: 6px 0; color: #0f172a;">${escapeHtml(bloodGroup)}</td></tr>` : ""}
-                  ${notes ? `<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">Clinical Notes:</td><td style="padding: 6px 0; color: #334155;">${escapeHtml(notes)}</td></tr>` : ""}
-                </tbody>
-              </table>
-            </div>
+            <!-- Appointment Card Block (Styled like Live Connect chat card) -->
+            <div style="background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 14px; margin: 12px 0;">
+              <div style="font-size: 11px; font-weight: 800; color: #38bdf8; letter-spacing: 0.5px; margin-bottom: 4px;">
+                ● APPOINTMENT CONFIRMED
+              </div>
+              <div style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 6px;">
+                ${safeName} · ${isOnline ? "Online Telehealth Consultation" : "In-Person Clinic Visit"}
+              </div>
+              <div style="font-size: 13.5px; color: #cbd5e1; line-height: 1.6;">
+                📅 <strong>Date:</strong> ${safeDate}<br/>
+                ⏰ <strong>Time:</strong> ${safeTime}<br/>
+                🩺 <strong>Physician:</strong> ${safeDoctor}<br/>
+                ${phone ? `📞 <strong>Phone:</strong> ${escapeHtml(phone)}<br/>` : ""}
+                ${notes ? `📝 <strong>Clinical Reason:</strong> ${escapeHtml(notes)}<br/>` : ""}
+              </div>
 
-            <!-- Online / Offline Specific Block -->
-            ${
-              isOnline
-                ? `
-              <!-- ONLINE TELEHEALTH WITH ZOOM LINK -->
-              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 8px; padding: 20px; margin: 0 0 24px 0;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #166534; font-weight: 700;">Telehealth Video Consultation Link</h3>
-                <p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.5; color: #14532d;">
-                  Your digital consultation room is prepared. Please use the button below to join ${safeDoctor} at your appointed time:
-                </p>
-                <div style="text-align: center; margin: 16px 0;">
-                  <a href="${escapeHtml(zoomUrl || `https://zoom.us/j/${zoomId}?pwd=CLINIC`)}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 15px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" target="_blank">
-                    Join Zoom Video Consultation
+              ${isOnline ? `
+                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center;">
+                  <a href="${escapeHtml(zoomUrl || `https://zoom.us/j/${zoomId}?pwd=CLINIC`)}" style="background: #0284c7; color: #ffffff; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block;" target="_blank">
+                    🎥 Join Telehealth Video Consultation
                   </a>
+                  <div style="margin-top: 8px; font-size: 11px; color: #94a3b8;">
+                    Meeting ID: ${escapeHtml(zoomId || "Live Link")} · Passcode: CLINIC
+                  </div>
                 </div>
-                <div style="margin: 10px 0 0 0; font-size: 13px; color: #15803d; text-align: center;">
-                  ${zoomUrl ? `<strong>Direct Link:</strong> <a href="${escapeHtml(zoomUrl)}" style="color: #0369a1; word-break: break-all;">${escapeHtml(zoomUrl)}</a><br/>` : ""}
-                  ${zoomId ? `<strong>Meeting ID:</strong> ${escapeHtml(zoomId)}` : ""}
+              ` : `
+                <div style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 12.5px; color: #cbd5e1;">
+                  📍 <strong>Clinic Location:</strong> ${escapeHtml(clinicAddress)}
                 </div>
-                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #bbf7d0; font-size: 12px; color: #166534; line-height: 1.4;">
-                  <strong>Helpful Tips:</strong> Please join 5 minutes early to test your audio and video. Find a quiet, well-lit space and keep any medical reports or prescriptions nearby.
-                </div>
-              </div>
-            `
-                : `
-              <!-- OFFLINE IN-PERSON VISIT WITHOUT ZOOM LINK -->
-              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 5px solid #0284c7; border-radius: 8px; padding: 20px; margin: 0 0 24px 0;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0369a1; font-weight: 700;">In-Person Clinic Visit Instructions</h3>
-                <p style="margin: 0 0 8px 0; font-size: 14px; line-height: 1.5; color: #1e293b;">
-                  <strong>Clinic Location:</strong><br/>
-                  ${escapeHtml(clinicAddress)}
-                </p>
-                <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.5; color: #475569;">
-                  <strong>Visiting Guidelines:</strong> Please arrive 10 to 15 minutes before your consultation for initial check-in and vital signs check. Valet parking and patient assistance are available at our main entrance.
-                </p>
-              </div>
-            `
-            }
-
-            <!-- Kindful Reassurance -->
-            <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px 0;">
-              Your health, comfort, and peace of mind are always our highest priorities. Should you have any questions or feel unwell prior to your visit, please do not hesitate to contact our care team immediately.
-            </p>
-
-            <!-- Care Continuity Action Links -->
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin: 0 0 24px 0; text-align: center; font-size: 13px;">
-              <span style="color: #64748b; font-weight: 600; display: block; margin-bottom: 6px;">Manage Your Appointment:</span>
-              <a href="${actionUrl("confirm")}" style="color: #0d9488; text-decoration: none; font-weight: 600; margin: 0 10px;">Confirm Appointment</a> |
-              <a href="${actionUrl("reschedule")}" style="color: #0284c7; text-decoration: none; font-weight: 600; margin: 0 10px;">Request Reschedule</a> |
-              <a href="${actionUrl("cancel")}" style="color: #e11d48; text-decoration: none; font-weight: 600; margin: 0 10px;">Cancel Visit</a>
+              `}
             </div>
 
-            <!-- Sign-off -->
-            <p style="font-size: 14px; line-height: 1.5; color: #334155; margin: 0;">
-              Wishing you sound health and gentle healing,<br/>
-              <strong>Clinic Desk Healthcare Team</strong><br/>
-              <span style="font-size: 12px; color: #64748b;">In care partnership with ${safeDoctor}</span>
-            </p>
+            <!-- Quick Action Chips -->
+            <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-wrap: wrap;">
+              <a href="${actionUrl("confirm")}" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-decoration: none;">
+                ✓ Confirm Attendance
+              </a>
+              <a href="${actionUrl("reschedule")}" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0ea5e9; color: #38bdf8; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-decoration: none;">
+                ↻ Request Reschedule
+              </a>
+              <a href="${actionUrl("cancel")}" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-decoration: none;">
+                ✕ Cancel Visit
+              </a>
+            </div>
+
+            <div style="margin-top: 10px; font-size: 11px; color: #64748b; text-align: right;">
+              ${safeTime} · Delivered via Clinic Desk
+            </div>
+          </div>
+
+          <!-- Chat Reply Prompt -->
+          <div style="text-align: center; padding-top: 8px; font-size: 12px; color: #94a3b8;">
+            💬 <em>Reply directly to this email to chat with Dr. ${safeDoctor} & clinic care team</em>
           </div>
         </div>
       `;
@@ -281,6 +252,26 @@ export async function POST(request: Request) {
       ],
     });
 
+    // 7b. Dispatch to ART Multiagent ("Patient Appointment Automation Agent multiagent")
+    let agentExecution: any = null;
+    try {
+      agentExecution = await runClinicAgentTask({
+        action: isCancelled ? "cancel_appointment" : "create_appointment",
+        patientName: name,
+        patientEmail: email,
+        doctor,
+        date,
+        time,
+        mode,
+        zoomUrl,
+        zoomId,
+        notes,
+        appointmentId,
+      });
+    } catch (agentErr) {
+      console.warn("ART Multiagent task execution notice:", agentErr);
+    }
+
     // Auto-fill Ticket ID in Airtable as soon as email is sent
     if (appointmentId && patientTicket?.id) {
       try {
@@ -292,9 +283,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // 8. Dispatch Doctor Notification Ticket (Freshdesk emails Doctor directly as Requester)
+    // 8. Dispatch Doctor Notification Ticket ONLY when requested (e.g. receptionist clicked "Notify Doctor")
     let doctorTicket: any = null;
-    if (doctorEmail && doctorEmail.toLowerCase() !== email.toLowerCase()) {
+    if (notifyDoctor && doctorEmail && doctorEmail.toLowerCase() !== email.toLowerCase()) {
       try {
         const doctorSubject = isCancelled
           ? `Clinic Desk · Consultation Cancelled · Patient: ${name} · ${date}`
@@ -326,58 +317,69 @@ export async function POST(request: Request) {
             </div>
           `
           : `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; color: #1e293b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-              <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 24px; color: #ffffff; text-align: center;">
-                <h1 style="margin: 0 0 6px 0; font-size: 22px; font-weight: 700;">Clinic Desk Healthcare</h1>
-                <p style="margin: 0; font-size: 14px; opacity: 0.95;">Physician Schedule Notification</p>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f172a; border-radius: 16px; padding: 20px; color: #f8fafc;">
+              <!-- Chat Header -->
+              <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 16px;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #0d9488 0%, #059669 100%); display: inline-flex; align-items: center; justify-content: center; font-size: 20px; color: #ffffff; text-align: center; line-height: 40px;">
+                  📋
+                </div>
+                <div>
+                  <div style="font-size: 15px; font-weight: 700; color: #ffffff; margin-bottom: 2px;">
+                    Clinic Reception Desk
+                  </div>
+                  <div style="font-size: 12px; color: #94a3b8;">
+                    Live Connect Schedule Alert · ${safeDoctor}
+                  </div>
+                </div>
               </div>
-              <div style="padding: 24px;">
-                <p style="font-size: 16px; margin: 0 0 16px 0;">Dear <strong>${safeDoctor}</strong>,</p>
-                <p style="font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 20px 0;">
-                  A clinical consultation has been scheduled with you for patient <strong>${safeName}</strong>.
+
+              <!-- Chat Message Bubble -->
+              <div style="background: #1e293b; border: 1px solid #334155; border-radius: 14px; border-top-left-radius: 4px; padding: 16px; color: #f1f5f9; font-size: 14px; line-height: 1.5; margin-bottom: 12px;">
+                <p style="margin: 0 0 10px 0; font-size: 14.5px;">
+                  Hello <strong>${safeDoctor}</strong>, a new consultation has been booked on your calendar:
                 </p>
-                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 0 0 20px 0; font-size: 14px;">
-                  <h3 style="margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 700;">Consultation Details</h3>
-                  <table style="width: 100%; border-collapse: collapse;">
-                    <tr><td style="padding: 5px 0; color: #64748b; width: 140px;">Patient Name:</td><td style="padding: 5px 0; font-weight: 600; color: #0f172a;">${safeName}</td></tr>
-                    <tr><td style="padding: 5px 0; color: #64748b;">Patient Email:</td><td style="padding: 5px 0; color: #0284c7;">${email}</td></tr>
-                    ${phone ? `<tr><td style="padding: 5px 0; color: #64748b;">Contact Phone:</td><td style="padding: 5px 0; color: #0f172a;">${escapeHtml(phone)}</td></tr>` : ""}
-                    ${bloodGroup ? `<tr><td style="padding: 5px 0; color: #64748b;">Blood Group:</td><td style="padding: 5px 0; color: #0f172a;">${escapeHtml(bloodGroup)}</td></tr>` : ""}
-                    <tr><td style="padding: 5px 0; color: #64748b;">Date & Time:</td><td style="padding: 5px 0; font-weight: 600; color: #0f172a;">${safeDate} at ${safeTime}</td></tr>
-                    <tr><td style="padding: 5px 0; color: #64748b;">Consultation Mode:</td><td style="padding: 5px 0; font-weight: 600; color: ${isOnline ? "#0284c7" : "#059669"};">${isOnline ? "Online Telehealth Consultation" : "In-Person Clinic Visit"}</td></tr>
-                    ${notes ? `<tr><td style="padding: 5px 0; color: #64748b; vertical-align: top;">Clinical Notes:</td><td style="padding: 5px 0; color: #334155;">${escapeHtml(notes)}</td></tr>` : ""}
-                  </table>
+
+                <!-- Appointment Card Block (Styled like Live Connect chat card) -->
+                <div style="background: #0f172a; border: 1px solid #10b981; border-radius: 10px; padding: 14px; margin: 12px 0;">
+                  <div style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px; margin-bottom: 4px;">
+                    ● NEW CONSULTATION SCHEDULED
+                  </div>
+                  <div style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 6px;">
+                    ${safeName} · ${isOnline ? "Online Telehealth Consultation" : "In-Person Clinic Visit"}
+                  </div>
+                  <div style="font-size: 13.5px; color: #cbd5e1; line-height: 1.6;">
+                    📅 <strong>Date:</strong> ${safeDate}<br/>
+                    ⏰ <strong>Time:</strong> ${safeTime}<br/>
+                    👤 <strong>Patient:</strong> ${safeName} (${email})<br/>
+                    ${phone ? `📞 <strong>Phone:</strong> ${escapeHtml(phone)}<br/>` : ""}
+                    ${bloodGroup ? `🩸 <strong>Blood Group:</strong> ${escapeHtml(bloodGroup)}<br/>` : ""}
+                    ${notes ? `📝 <strong>Clinical Reason:</strong> ${escapeHtml(notes)}<br/>` : ""}
+                  </div>
+
+                  ${isOnline ? `
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #334155; text-align: center;">
+                      <a href="${escapeHtml(zoomUrl || `https://zoom.us/j/${zoomId}?pwd=CLINIC`)}" style="background: #10b981; color: #ffffff; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block;" target="_blank">
+                        🎥 Launch Physician Consultation Room (Zoom)
+                      </a>
+                      <div style="margin-top: 8px; font-size: 11px; color: #94a3b8;">
+                        Meeting ID: ${escapeHtml(zoomId || "Live Link")} · Passcode: CLINIC
+                      </div>
+                    </div>
+                  ` : `
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 12.5px; color: #cbd5e1;">
+                      📍 <strong>OPD Room:</strong> Main Clinic Consultation Suite (${escapeHtml(clinicAddress)})
+                    </div>
+                  `}
                 </div>
 
-                ${isOnline ? `
-                  <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 8px; padding: 18px; margin: 0 0 20px 0;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #166534; font-weight: 700;">Host Video Consultation Link (Zoom)</h3>
-                    <p style="margin: 0 0 12px 0; font-size: 14px; color: #14532d;">
-                      Please click the button below to launch the video meeting at the scheduled time:
-                    </p>
-                    <div style="text-align: center; margin: 14px 0;">
-                      <a href="${escapeHtml(zoomUrl || `https://zoom.us/j/${zoomId}?pwd=CLINIC`)}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" target="_blank">
-                        Start Video Consultation (Host)
-                      </a>
-                    </div>
-                    <div style="margin: 8px 0 0 0; font-size: 13px; color: #15803d; text-align: center;">
-                      ${zoomUrl ? `<strong>Direct Link:</strong> <a href="${escapeHtml(zoomUrl)}" style="color: #0369a1; word-break: break-all;">${escapeHtml(zoomUrl)}</a><br/>` : ""}
-                      ${zoomId ? `<strong>Meeting ID:</strong> ${escapeHtml(zoomId)}` : ""}
-                    </div>
-                  </div>
-                ` : `
-                  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 5px solid #0284c7; border-radius: 8px; padding: 16px; margin: 0 0 20px 0;">
-                    <h3 style="margin: 0 0 6px 0; font-size: 15px; color: #0369a1; font-weight: 700;">In-Person Clinic Consultation</h3>
-                    <p style="margin: 0; font-size: 13px; color: #334155;">
-                      Location: ${escapeHtml(clinicAddress)}. Patient has been instructed to arrive 10-15 minutes prior for vitals and check-in.
-                    </p>
-                  </div>
-                `}
+                <div style="margin-top: 10px; font-size: 11px; color: #64748b; text-align: right;">
+                  ${safeTime} · Delivered via Clinic Desk
+                </div>
+              </div>
 
-                <p style="font-size: 14px; line-height: 1.5; color: #334155; margin: 0;">
-                  Warm regards,<br/>
-                  <strong>Clinic Desk Scheduling System</strong>
-                </p>
+              <!-- Chat Reply Prompt -->
+              <div style="text-align: center; padding-top: 8px; font-size: 12px; color: #94a3b8;">
+                💬 <em>Reply directly to this email to send a care note or prescription update to ${safeName}</em>
               </div>
             </div>
           `;
@@ -410,6 +412,7 @@ export async function POST(request: Request) {
       mode,
       hasZoom: isOnline && Boolean(zoomUrl || zoomId),
       freshserviceTicketId: (patientTicket as any).freshserviceTicketId,
+      agentExecution,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not dispatch appointment email.";

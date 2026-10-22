@@ -38,6 +38,7 @@ export function artConfig() {
     apiBase: (process.env.ART_API_BASE || "https://demo.arealtimetech.com/ws").replace(/\/$/, ""),
     uri: (process.env.ART_WS_URI || "demo.arealtimetech.com/ws").replace(/^https?:\/\//, "").replace(/\/$/, ""),
     event: process.env.ART_APPOINTMENT_EVENT || "send_sms",
+    agentId: process.env.ART_AGENT_ID || "6ab4e96b92bd477cd1a31fd3",
   };
 }
 
@@ -52,6 +53,7 @@ export function artBrowserConfig(profile: ClinicProfile) {
     channel: config.channel,
     event: config.event,
     username: profile.artUsername,
+    agentId: config.agentId,
   };
 }
 

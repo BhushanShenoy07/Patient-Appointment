@@ -280,8 +280,6 @@ export const APPOINTMENTS_TABLE_ALLOWED_FIELDS = new Set([
   "Medical Notes",
   "Age",
   "Gender",
-  "Follow-up Start",
-  "Follow-up Day",
 ]);
 
 export const PATIENTS_TABLE_ALLOWED_FIELDS = new Set([
@@ -458,14 +456,7 @@ export async function saveAirtableRecord(
     // Primary table (tblLSp4tTMNANmGjc) contains all 18 writable fields
     for (const [k, v] of Object.entries(rawValues)) {
       if (APPOINTMENTS_TABLE_ALLOWED_FIELDS.has(k)) {
-        if (k === "Follow-up Day") {
-          if (v === "" || v === null || v === undefined) {
-            if (currentId) values[k] = null;
-          } else {
-            const num = Number(v);
-            if (!isNaN(num)) values[k] = num;
-          }
-        } else if (k === "Appointment Date") {
+        if (k === "Appointment Date") {
           if (v === "" || v === null || v === undefined) {
             if (currentId) values[k] = null;
           } else {

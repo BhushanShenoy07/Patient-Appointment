@@ -40,12 +40,13 @@ export async function POST(request: Request) {
       tags: ["clinic_followup", `appointment_${appointmentId}`, `appointment_${appointmentId}_day_${nextDay}`],
       description: `<p>Hello ${escapeHtml(name)},</p><p>This is your day ${nextDay} check-in after your visit with ${escapeHtml(doctor)}. We hope you are recovering well. Please share how you are feeling and rate your care. You can reply to this email or use the secure link below.</p><p><a href="${feedbackUrl.toString()}">Share your health update and rate your care</a></p><p>If your health has suddenly worsened or you need urgent help, contact your doctor or local emergency services now.</p><p>Warm regards,<br>Clinic Desk care team</p>`,
     });
-    const startDate = priorRecord?.fields?.["Follow-up Start"] || new Date().toISOString().slice(0, 10);
-    const updatePayload: Record<string, any> = { "Follow-up Start": startDate, "Follow-up Day": nextDay };
+    const updatePayload: Record<string, any> = {};
     if (!priorRecord?.fields?.["Ticket ID"] && ticket?.id) {
       updatePayload["Ticket ID"] = String(ticket.id);
     }
-    await saveAirtableRecord(appointmentId, updatePayload);
+    if (Object.keys(updatePayload).length > 0) {
+      await saveAirtableRecord(appointmentId, updatePayload);
+    }
     return NextResponse.json({ ok: true, ticketId: ticket.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not send the patient follow-up.";
