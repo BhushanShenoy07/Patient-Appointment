@@ -820,10 +820,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: ClinicUser) => void }) {
 function cleanPatientMessage(text: string): string {
   if (!text) return "";
   let cleaned = text;
-  cleaned = cleaned.split(/(?:\r?\n|\s)*(?:On\s+[\s\S]+?wrote:|\-+\s*Original Message\s*\-+|\-+\s*Forwarded message\s*\-+)/i)[0];
+  cleaned = cleaned.split(/(?:\r?\n)+(?:On\s+.*?(?:wrote:|<.*?>)|\-+\s*Original Message\s*\-+|\-+\s*Forwarded message\s*\-+)/i)[0];
   cleaned = cleaned.replace(/^\s*>.*$/gm, "");
-  cleaned = cleaned.replace(/\b\d+:\d+\b/g, "");
-  return cleaned.trim();
+  const trimmed = cleaned.trim();
+  return trimmed || text.trim();
 }
 
 function cleanDoctorMessage(text: string): string {
@@ -833,7 +833,8 @@ function cleanDoctorMessage(text: string): string {
   cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "");
   cleaned = cleaned.replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "");
   cleaned = cleaned.replace(/Delivered via Freshdesk[\s\S]*$/i, "");
-  return cleaned.trim();
+  const trimmed = cleaned.trim();
+  return trimmed || text.trim();
 }
 
 export default function Home() {
@@ -1562,19 +1563,57 @@ interface ArtTaskLog {
       if (!response.ok) throw new Error(body.error || "Could not load follow-up records.");
       if (Array.isArray(body.updates)) {
         setFollowupUpdates(prev => {
-          if (prev.length === body.updates.length) {
+          const merged = body.updates.map((incomingItem: any) => {
+            const existingItem = prev.find(
+              p => String(p.id) === String(incomingItem.id) || (incomingItem.fsId && String(p.fsId) === String(incomingItem.fsId))
+            );
+            if (!existingItem) return incomingItem;
+
+            const existingConvs: any[] = Array.isArray(existingItem.conversations) ? existingItem.conversations : [];
+            const incomingConvs: any[] = Array.isArray(incomingItem.conversations) ? incomingItem.conversations : [];
+
+            // If incoming has no conversations but existing had conversations, preserve existing conversations!
+            if (incomingConvs.length === 0 && existingConvs.length > 0) {
+              return {
+                ...incomingItem,
+                hasReplies: true,
+                conversations: existingConvs,
+              };
+            }
+
+            // Combine conversations: take all incoming, and preserve any local unmerged conversations
+            const combinedConvs = [...incomingConvs];
+            for (const ec of existingConvs) {
+              const alreadyPresent = incomingConvs.some(
+                ic => ic.id === ec.id || (ic.message && ec.message && ic.message.trim() === ec.message.trim())
+              );
+              if (!alreadyPresent) {
+                combinedConvs.push(ec);
+              }
+            }
+
+            combinedConvs.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+
+            return {
+              ...incomingItem,
+              hasReplies: incomingItem.hasReplies || combinedConvs.length > 0,
+              conversations: combinedConvs,
+            };
+          });
+
+          if (prev.length === merged.length) {
             const same = prev.every((item, i) => {
-              const b = body.updates[i];
+              const m = merged[i];
               return (
-                item.id === b.id &&
-                item.updatedAt === b.updatedAt &&
-                item.message === b.message &&
-                (item.conversations?.length || 0) === (b.conversations?.length || 0)
+                item.id === m.id &&
+                item.updatedAt === m.updatedAt &&
+                item.message === m.message &&
+                (item.conversations?.length || 0) === (m.conversations?.length || 0)
               );
             });
             if (same) return prev;
           }
-          return body.updates;
+          return merged;
         });
         if (forceRefresh && !silent) {
           setToast(`Inbox refreshed with ${body.updates.length} message threads.`);
@@ -3811,8 +3850,14 @@ interface ArtTaskLog {
                         </span>
                       </div>
 
-                      {/* Initial Patient Query / Notice Bubble (if non-empty and not automated boilerplate) */}
-                      {Boolean(u.message && u.message.trim().length > 0 && !u.message.includes("Clinic Desk Live Connect") && !u.message.includes("Consultant Physician")) && (
+                      {/* Initial Patient Query / Notice Bubble (if non-empty, not boilerplate, and not already in conversations) */}
+                      {Boolean(
+                        u.message &&
+                        u.message.trim().length > 0 &&
+                        !u.message.includes("Clinic Desk Live Connect") &&
+                        !u.message.includes("Consultant Physician") &&
+                        !(hasConversations && u.conversations!.some(c => (c.message || "").trim() === u.message.trim()))
+                      ) && (
                         <div className="wa-bubble-row incoming">
                           <div className="wa-bubble incoming">
                             <div className="wa-bubble-header">
@@ -3839,9 +3884,8 @@ interface ArtTaskLog {
                         const fromStr = (c.from || "").trim();
 
                         // Determine sender: Outgoing (Doctor / Clinic) vs Incoming (Patient)
-                        const isSupportDesk = /support@|freshdesk|bixbytes|aiotrix/i.test(fromStr);
                         const isPatientEmail = Boolean(u.email && fromStr.toLowerCase().includes(u.email.toLowerCase()));
-                        const isPatient = (Boolean(c.incoming) && !isSupportDesk) || isPatientEmail;
+                        const isPatient = Boolean(c.incoming) || isPatientEmail;
                         const isDoctorOrStaff = !isPatient;
 
                         const displayBody = isPatient ? cleanPatientMessage(rawMsg) : cleanDoctorMessage(rawMsg);

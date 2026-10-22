@@ -503,10 +503,10 @@ function saveTicketsToDisk(tickets: any[]) {
   }
 }
 
-export function invalidateTicketsCache() {
+export function invalidateTicketsCache(clearConversations = false) {
   globalThis.__clinicTicketsCache = [];
   globalThis.__clinicTicketsCacheTime = 0;
-  if (globalThis.__clinicConversationCache) {
+  if (clearConversations && globalThis.__clinicConversationCache) {
     globalThis.__clinicConversationCache.clear();
   }
   try {
@@ -581,8 +581,16 @@ export async function getClinicTicketsWithConversations(limit = 30) {
     const enriched = await Promise.all(
       clinicTickets.map(async (t: any) => {
         let conversations: any[] = [];
+        const createdTime = new Date(t.created_at || 0).getTime();
+        const updatedTime = new Date(t.updated_at || 0).getTime();
+        const timeDiff = Math.abs(updatedTime - createdTime);
+        const cached = conversationCache.get(String(t.id));
+        const hasCachedConvs = Boolean(cached && Array.isArray(cached.conversations) && cached.conversations.length > 0);
+
         const hasRealReplies = Boolean(
-          t.stats && (t.stats.agent_responded_at || t.stats.requester_responded_at || t.stats.first_responded_at)
+          (t.stats && (t.stats.agent_responded_at || t.stats.requester_responded_at || t.stats.first_responded_at)) ||
+          timeDiff > 2000 ||
+          hasCachedConvs
         );
 
         const requester = t.requester || {};
@@ -602,8 +610,7 @@ export async function getClinicTicketsWithConversations(limit = 30) {
         });
 
         if (hasRealReplies) {
-          const cached = conversationCache.get(String(t.id));
-          if (cached && cached.updatedAt === t.updated_at) {
+          if (cached && cached.updatedAt === t.updated_at && cached.conversations?.length > 0) {
             conversations = cached.conversations;
           } else {
             try {
@@ -629,11 +636,27 @@ export async function getClinicTicketsWithConversations(limit = 30) {
                   };
                 });
               }
+              // Preserve any cached local replies not yet indexed by Freshdesk
+              if (cached && Array.isArray(cached.conversations) && cached.conversations.length > 0) {
+                for (const existing of cached.conversations) {
+                  const exists = conversations.some((c: any) =>
+                    c.id === existing.id || (c.message && existing.message && c.message.trim() === existing.message.trim())
+                  );
+                  if (!exists) {
+                    conversations.push(existing);
+                  }
+                }
+              }
+              conversationCache.set(String(t.id), { updatedAt: t.updated_at, conversations });
             } catch (convErr) {
               console.warn(`Could not load conversations for ticket #${t.id}:`, convErr instanceof Error ? convErr.message : convErr);
+              if (cached && Array.isArray(cached.conversations)) {
+                conversations = cached.conversations;
+              }
             }
-            conversationCache.set(String(t.id), { updatedAt: t.updated_at, conversations });
           }
+        } else if (cached && Array.isArray(cached.conversations)) {
+          conversations = cached.conversations;
         }
 
         const attendingDoctor = extractAttendingDoctor({
@@ -892,8 +915,37 @@ export async function replyToFreshdeskTicket(ticketId: number | string, replyMes
     }
   }
 
-  // Invalidate cache AFTER dispatching replies so next load fetches latest dialogue
-  invalidateTicketsCache();
+  // Update in-memory conversation cache immediately with this new reply
+  if (!globalThis.__clinicConversationCache) {
+    globalThis.__clinicConversationCache = new Map();
+  }
+  const convCache = globalThis.__clinicConversationCache!;
+  const replyItem = {
+    id: String(lastResult?.id || `reply_${Date.now()}`),
+    incoming: false,
+    from: senderMatch,
+    message: cleanReply,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updateConvCacheForId = (idKey: string) => {
+    const existing = convCache.get(idKey);
+    const convs = existing?.conversations ? [...existing.conversations] : [];
+    if (!convs.some((c: any) => c.message === cleanReply)) {
+      convs.push(replyItem);
+    }
+    convCache.set(idKey, {
+      updatedAt: new Date().toISOString(),
+      conversations: convs,
+    });
+  };
+
+  if (fdId) updateConvCacheForId(String(fdId));
+  if (cleanId && cleanId !== fdId) updateConvCacheForId(String(cleanId));
+  if (fsId && fsId !== fdId && fsId !== cleanId) updateConvCacheForId(String(fsId));
+
+  // Invalidate cache AFTER dispatching replies so next load fetches latest dialogue without wiping conversation cache
+  invalidateTicketsCache(false);
 
   if (!replyDelivered) {
     if (!hasFreshdeskConfig() && !hasFreshserviceConfig()) {
