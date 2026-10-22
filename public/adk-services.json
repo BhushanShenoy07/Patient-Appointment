@@ -1,0 +1,15 @@
+{
+  "Client-ID": "CD7yfO8ZIOBM1OmO",
+  "Client-Secret": "nLgsgt6f2yZ4GRW-q6KWHXk0Kn3CryWe",
+  "Org-Title": "Automation_Lab",
+  "Environment": "Production",
+  "ProjectKey": "IJWNAAFuwkkzYS_UZ3YgzOilw66g85W3",
+  "Agent-ID": "6ab4e96b92bd477cd1a31fd3",
+  "Agents": {
+    "multi": "6ab4e96b92bd477cd1a31fd3",
+    "freshdesk": "6ab4c48b92bd477cd1a31ead",
+    "zoom": "6acefbbf6e21cc96a2ed17af",
+    "calendar": "6ab4c16d92bd477cd1a31e5a",
+    "airtable": "6ab4c32c92bd477cd1a31e7c"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "Client-ID": "CD7yfO8ZIOBM1OmO",
+  "Client-Secret": "nLgsgt6f2yZ4GRW-q6KWHXk0Kn3CryWe",
+  "Org-Title": "Automation_Lab",
+  "Environment": "Testing",
+  "ProjectKey": "GDDSSrngWzSAYLDGyADSPN-sXYcJGryk",
+  "LiveConnectProjectKey": "IJWNAAFuwkkzYS_UZ3YgzOilw66g85W3",
+  "Agent-ID": "6ab4e96b92bd477cd1a31fd2",
+  "AgentSlug": "patient-appointment-automation-agent-multiagent",
+  "Agents": {
+    "multi": "patient-appointment-automation-agent-multiagent",
+    "multiHex": "6ab4e96b92bd477cd1a31fd2",
+    "freshdesk": "freshdesk",
+    "freshdeskHex": "6ab4c48b92bd477cd1a31ead",
+    "zoom": "zoom-agent",
+    "zoomHex": "6acefbbf6e21cc96a2ed17af",
+    "calendar": "calendar-google-health",
+    "calendarHex": "6ab4c16d92bd477cd1a31e5a",
+    "airtable": "airtable",
+    "airtableHex": "6ab4c32c92bd477cd1a31e7c"
+  }
+}
