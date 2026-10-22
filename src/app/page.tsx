@@ -1621,13 +1621,21 @@ interface ArtTaskLog {
       const res = await fetch("/api/follow-up/inbox", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId, message: msgToSend }),
+        body: JSON.stringify({
+          ticketId,
+          message: msgToSend,
+          senderDoctor: doctorSender,
+          senderRole: user?.role || "doctor",
+          senderEmail: user?.email || "bhushanshenoy07@gmail.com",
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to dispatch reply.");
       setToast(`Reply successfully delivered to ${recipientName} via Freshworks!`);
-      // Invalidate tickets cache and fetch fresh conversations
-      void loadFollowupUpdates(true, true);
+      // Refresh inbox after a short delay so Freshdesk conversation is indexed
+      setTimeout(() => {
+        void loadFollowupUpdates(true, true);
+      }, 1500);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Error dispatching reply.");
       void loadFollowupUpdates(true, true);

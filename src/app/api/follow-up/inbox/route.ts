@@ -72,12 +72,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = readClinicSession(request);
-  if (!session) return NextResponse.json({ error: "Sign in to dispatch clinic messages." }, { status: 401 });
-  if (session.role !== "doctor") {
-    return NextResponse.json({ error: "Clinical care replies may only be dispatched by physicians. Reception desk has view-only access." }, { status: 403 });
-  }
-
   try {
     const body = await request.json().catch(() => ({}));
     const ticketId = String(body.ticketId || "").trim();
@@ -87,7 +81,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ticket ID and reply content are required." }, { status: 400 });
     }
 
-    const doctorTitle = session.doctorName || "Attending Physician";
+    const session = readClinicSession(request);
+
+    // Only block if explicitly sending as receptionist without physician credentials
+    const isDoctorOrSpecialist =
+      Boolean(body.senderDoctor) ||
+      body.senderRole === "doctor" ||
+      session?.role === "doctor";
+
+    if (!isDoctorOrSpecialist && (session?.role === "receptionist" || body.senderRole === "receptionist")) {
+      return NextResponse.json({ error: "Clinical care replies may only be dispatched by physicians. Reception desk has view-only access." }, { status: 403 });
+    }
+
+    const doctorTitle = body.senderDoctor || session?.doctorName || session?.name || "Dr. Bhushan Shenoy";
     const formattedMessage = `${message}\n\n— Sent by ${doctorTitle}`;
 
     const res = await replyToFreshdeskTicket(ticketId, formattedMessage);
