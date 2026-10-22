@@ -817,6 +817,25 @@ function LoginScreen({ onLogin }: { onLogin: (user: ClinicUser) => void }) {
   );
 }
 
+function cleanPatientMessage(text: string): string {
+  if (!text) return "";
+  let cleaned = text;
+  cleaned = cleaned.split(/(?:\r?\n|\s)*(?:On\s+[\s\S]+?wrote:|\-+\s*Original Message\s*\-+|\-+\s*Forwarded message\s*\-+)/i)[0];
+  cleaned = cleaned.replace(/^\s*>.*$/gm, "");
+  cleaned = cleaned.replace(/\b\d+:\d+\b/g, "");
+  return cleaned.trim();
+}
+
+function cleanDoctorMessage(text: string): string {
+  if (!text) return "";
+  let cleaned = text;
+  cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*(?:Sent by\s+)?Dr\.[\s\S]*$/i, "");
+  cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "");
+  cleaned = cleaned.replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "");
+  cleaned = cleaned.replace(/Delivered via Freshdesk[\s\S]*$/i, "");
+  return cleaned.trim();
+}
+
 export default function Home() {
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [user, setUser] = useState<ClinicUser | null>(null);
@@ -1567,7 +1586,7 @@ interface ArtTaskLog {
   }
 
   async function submitTicketReply(ticketId: string, recipientName: string) {
-    if (!isDoctorRole) return;
+    if (user?.role === "receptionist") return;
     if (!replyMessageText.trim()) return;
     const msgToSend = replyMessageText.trim();
     setSendingReply(true);
@@ -1577,7 +1596,7 @@ interface ArtTaskLog {
       id: `local_${Date.now()}`,
       incoming: false,
       from: doctorSender,
-      message: `${msgToSend}\n\n— Sent by ${doctorSender}`,
+      message: msgToSend,
       createdAt: new Date().toISOString(),
     };
 
@@ -2302,6 +2321,7 @@ interface ArtTaskLog {
   if (!user) return <LoginScreen onLogin={setUser} />;
 
   const isDoctorRole = user.role === "doctor";
+  const canReplyToPatient = user.role !== "receptionist";
   const unreadArtCount = artMessages.filter(m => !m.read && m.direction === "in").length;
 
   return (
@@ -3774,135 +3794,116 @@ interface ArtTaskLog {
                       <span>{u.subject}</span>
                     </div>
 
-                    {/* Chat Messenger Thread (Styled like Live Connect) */}
-                    <div
-                      style={{
-                        backgroundColor: "var(--surface-secondary)",
-                        border: "1px solid var(--line-200)",
-                        borderRadius: "10px",
-                        padding: "14px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "10px",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      {/* Initial Patient Query / Notice Bubble (if non-empty) */}
-                      {Boolean(u.message && u.message.trim().length > 0) && (
-                        <div className="chat-message-row incoming">
-                          <div className="chat-bubble-card" style={{ maxWidth: "85%" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--primary-700)" }}>
+                    {/* WhatsApp Style Care Chat Thread */}
+                    <div className="wa-chat-canvas">
+                      {/* Day / Date Divider */}
+                      <div style={{ display: "flex", justifyContent: "center", margin: "2px 0 6px 0" }}>
+                        <span className="wa-day-pill">
+                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Today"}
+                        </span>
+                      </div>
+
+                      {/* Initial Patient Query / Notice Bubble (if non-empty and not automated boilerplate) */}
+                      {Boolean(u.message && u.message.trim().length > 0 && !u.message.includes("Clinic Desk Live Connect") && !u.message.includes("Consultant Physician")) && (
+                        <div className="wa-bubble-row incoming">
+                          <div className="wa-bubble incoming">
+                            <div className="wa-bubble-header">
+                              <span className="wa-bubble-sender-incoming">
                                 👤 {u.name} (Patient Message)
                               </span>
-                              <span style={{ fontSize: "10.5px", color: "var(--ink-400)" }}>
-                                {u.createdAt ? new Date(u.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "Received"}
+                              <span className="wa-bubble-time" style={{ color: "#8696a0" }}>
+                                {u.createdAt ? new Date(u.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "Inquiry"}
                               </span>
                             </div>
-                            <div style={{ fontSize: "13px", lineHeight: "1.5", whiteSpace: "pre-wrap", color: "var(--ink-900)" }}>
+                            <div className="wa-bubble-body">
                               {u.message.trim()}
+                            </div>
+                            <div className="wa-bubble-footer" style={{ color: "#8696a0" }}>
+                              <span>Received via Freshdesk</span>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* Conversation Dialogue (Incoming / Outgoing styled like Live Connect) */}
+                      {/* Conversation Dialogue (WhatsApp Back-and-Forth Thread) */}
                       {hasConversations && u.conversations!.map(c => {
                         const rawMsg = c.message || "";
-                        let cleanedBody = rawMsg
-                          .replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "")
-                          .replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "")
-                          .replace(/Delivered via Freshdesk[\s\S]*$/i, "")
-                          .replace(/^[\s\S]*?Clinic Desk Live Connect\s*/i, "")
-                          .trim();
-                        const doctorMatch = rawMsg.match(/—\s*Sent by\s+(.*?)(?:\r?\n|$)/i)?.[1]?.trim() || "";
                         const fromStr = (c.from || "").trim();
 
-                        const isDesk = Boolean((doctorMatch && /reception/i.test(doctorMatch)) || /reception/i.test(fromStr));
-                        const isDoctor = Boolean((doctorMatch && /dr\.|physician/i.test(doctorMatch)) || /dr\.|physician/i.test(fromStr));
-                        const isPatient = Boolean(c.incoming || (!isDesk && !isDoctor && fromStr.includes("@")));
+                        // Determine sender: Outgoing (Doctor / Clinic) vs Incoming (Patient)
+                        const isSupportDesk = /support@|freshdesk|bixbytes|aiotrix/i.test(fromStr);
+                        const isPatientEmail = Boolean(u.email && fromStr.toLowerCase().includes(u.email.toLowerCase()));
+                        const isPatient = (Boolean(c.incoming) && !isSupportDesk) || isPatientEmail;
+                        const isDoctorOrStaff = !isPatient;
 
-                        // Determine alignment: outgoing (right side) if sent by current user, incoming (left side) if from peer/patient
-                        const isViewerOut = isDoctorRole ? isDoctor : (isDesk || (!isPatient && !isDoctor));
+                        const displayBody = isPatient ? cleanPatientMessage(rawMsg) : cleanDoctorMessage(rawMsg);
+                        const docName = u.attendingDoctor || (user?.doctorName) || "Dr. Bhushan Shenoy";
+                        const senderTitle = isPatient
+                          ? `👤 ${u.name || "Patient"}`
+                          : (user?.role === "receptionist" ? `🩺 ${docName} (Attending Physician)` : `🩺 ${docName} (You)`);
 
-                        const senderLabel = isPatient
-                          ? `👤 ${c.from || u.name} (Patient)`
-                          : isDoctor
-                            ? `🩺 ${doctorMatch || (c.from?.includes("support@") ? (user?.doctorName || "Consultant Physician") : c.from) || "Physician"}`
-                            : `📋 ${doctorMatch || "Reception Desk"}`;
+                        const formattedTime = c.createdAt
+                          ? new Date(c.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+                          : "Recent";
 
                         return (
                           <div
                             key={c.id}
-                            className={`chat-message-row ${isViewerOut ? "outgoing" : "incoming"}`}
+                            className={`wa-bubble-row ${isDoctorOrStaff ? "outgoing" : "incoming"}`}
                           >
-                            <div
-                              className="chat-bubble-card"
-                              style={{
-                                maxWidth: "85%",
-                                background: isViewerOut ? "var(--primary-600)" : undefined,
-                                color: isViewerOut ? "#ffffff" : undefined,
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                                <span
-                                  style={{
-                                    fontSize: "11.5px",
-                                    fontWeight: 700,
-                                    color: isViewerOut ? "rgba(255,255,255,0.95)" : "var(--primary-700)",
-                                  }}
-                                >
-                                  {senderLabel}
+                            <div className={`wa-bubble ${isDoctorOrStaff ? "outgoing" : "incoming"}`}>
+                              <div className="wa-bubble-header">
+                                <span className={isDoctorOrStaff ? "wa-bubble-sender-outgoing" : "wa-bubble-sender-incoming"}>
+                                  {senderTitle}
                                 </span>
-                                <span style={{ fontSize: "10.5px", opacity: 0.8 }}>
-                                  {c.createdAt ? new Date(c.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "Recent"}
+                                <span className="wa-bubble-time" style={{ color: isDoctorOrStaff ? "rgba(255,255,255,0.7)" : "#8696a0" }}>
+                                  {formattedTime}
                                 </span>
                               </div>
-                              <div
-                                style={{
-                                  fontSize: "13px",
-                                  lineHeight: "1.5",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  color: isViewerOut ? "#ffffff" : "var(--ink-900)",
-                                }}
-                              >
-                                {cleanedBody || rawMsg}
+                              <div className="wa-bubble-body">
+                                {displayBody || rawMsg}
                               </div>
-                              <span className="chat-bubble-meta" style={{ color: isViewerOut ? "rgba(255,255,255,0.8)" : "var(--ink-400)" }}>
-                                {isViewerOut ? "Delivered via Freshdesk" : "Received via Freshdesk"}
-                              </span>
+                              <div className="wa-bubble-footer" style={{ color: isDoctorOrStaff ? "rgba(255,255,255,0.7)" : "#8696a0" }}>
+                                {isDoctorOrStaff ? (
+                                  <>
+                                    <span>Delivered via Freshdesk</span>
+                                    <span className="wa-checkmarks">✓✓</span>
+                                  </>
+                                ) : (
+                                  <span>Received via Freshdesk</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
                       })}
 
-                      {/* If no body and no conversations */}
+                      {/* Empty conversation placeholder */}
                       {!Boolean(u.message && u.message.trim().length > 0) && !hasConversations && (
-                        <div style={{ textAlign: "center", padding: "12px", color: "var(--ink-400)", fontSize: "12px" }}>
-                          {isDoctorRole
-                            ? "No conversation history yet. Click \"Reply to Message\" to write to the patient."
-                            : "No conversation history yet. Awaiting patient or physician message."}
+                        <div style={{ textAlign: "center", padding: "24px 10px", color: "#8696a0", fontSize: "12.5px" }}>
+                          💬 No messages exchanged yet.
+                          {canReplyToPatient ? " Type a reply below to message the patient directly." : " Awaiting patient or physician messages."}
                         </div>
                       )}
                     </div>
 
-                    {/* Inline Reply Composer (exclusively for attending physicians) */}
-                    {isDoctorRole && isReplying && (
+                    {/* WhatsApp-Style Reply Bar (Exclusively for everyone EXCEPT Receptionist) */}
+                    {canReplyToPatient ? (
                       <div
                         style={{
-                          marginTop: "12px",
-                          padding: "14px",
-                          backgroundColor: "var(--surface-subtle)",
-                          border: "1px solid var(--primary-line)",
-                          borderRadius: "8px",
+                          marginBottom: "12px",
+                          padding: "12px 14px",
+                          backgroundColor: "#111b21",
+                          border: "1px solid #1f2c34",
+                          borderRadius: "10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
                         }}
                       >
-                        <div style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--ink-900)", marginBottom: "6px" }}>
-                          Reply to {u.name} ({u.email}):
-                        </div>
-                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
-                          <span style={{ fontSize: "11px", color: "var(--ink-500)", alignSelf: "center", marginRight: "2px" }}>Quick Templates:</span>
+                        {/* Quick Template Chips */}
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontSize: "11px", color: "#8696a0", marginRight: "2px" }}>Quick Templates:</span>
                           {[
                             "Please continue your prescribed medications as advised.",
                             "Your laboratory and test reports look normal.",
@@ -3913,42 +3914,101 @@ interface ArtTaskLog {
                               key={idx}
                               type="button"
                               className="quick-reply-chip"
-                              onClick={() => setReplyMessageText(prev => prev ? `${prev} ${chip}` : chip)}
+                              style={{
+                                backgroundColor: "#202c33",
+                                border: "1px solid #2a3942",
+                                color: "#d1d7db",
+                                fontSize: "11px",
+                                padding: "4px 10px",
+                                borderRadius: "14px",
+                              }}
+                              onClick={() => {
+                                setActiveReplyTicketId(u.id);
+                                setReplyMessageText(prev => (prev && activeReplyTicketId === u.id ? `${prev} ${chip}` : chip));
+                              }}
                             >
                               {chip}
                             </button>
                           ))}
                         </div>
-                        <textarea
-                          rows={3}
-                          placeholder={`Write a reply to ${u.name}... This message will be delivered directly to the patient via Freshworks (email & portal).`}
-                          value={replyMessageText}
-                          onChange={e => setReplyMessageText(e.target.value)}
-                          style={{ resize: "vertical", marginBottom: "10px" }}
-                          autoFocus
-                        />
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                          <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={() => {
-                              setActiveReplyTicketId(null);
-                              setReplyMessageText("");
+
+                        {/* Composer Input & Send Button */}
+                        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+                          <textarea
+                            rows={activeReplyTicketId === u.id ? 2 : 1}
+                            placeholder={`Write a reply to ${u.name}... (Press Send to deliver to patient via Freshdesk)`}
+                            value={activeReplyTicketId === u.id ? replyMessageText : ""}
+                            onFocus={() => {
+                              if (activeReplyTicketId !== u.id) {
+                                setActiveReplyTicketId(u.id);
+                              }
                             }}
-                            disabled={sendingReply}
-                          >
-                            Cancel
-                          </button>
+                            onChange={e => {
+                              setActiveReplyTicketId(u.id);
+                              setReplyMessageText(e.target.value);
+                            }}
+                            style={{
+                              flex: 1,
+                              backgroundColor: "#2a3942",
+                              border: "1px solid #3b4a54",
+                              color: "#ffffff",
+                              borderRadius: "8px",
+                              padding: "8px 12px",
+                              fontSize: "13px",
+                              resize: "vertical",
+                              outline: "none",
+                              lineHeight: "1.4",
+                            }}
+                          />
                           <button
                             type="button"
                             className="btn-primary"
-                            disabled={sendingReply || !replyMessageText.trim()}
+                            disabled={sendingReply || activeReplyTicketId !== u.id || !replyMessageText.trim()}
+                            style={{
+                              backgroundColor: "#00a884",
+                              borderColor: "#00a884",
+                              color: "#ffffff",
+                              padding: "8px 16px",
+                              borderRadius: "8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontWeight: 600,
+                              fontSize: "12.5px",
+                              cursor: (sendingReply || activeReplyTicketId !== u.id || !replyMessageText.trim()) ? "not-allowed" : "pointer",
+                              opacity: (activeReplyTicketId === u.id && replyMessageText.trim()) ? 1 : 0.6,
+                              flexShrink: 0,
+                            }}
                             onClick={() => void submitTicketReply(u.id, u.name)}
                           >
-                            <IconSend size={12} />
-                            <span>{sendingReply ? "Transmitting..." : "Send Reply to Patient"}</span>
+                            <IconSend size={13} />
+                            <span>{sendingReply && activeReplyTicketId === u.id ? "Sending…" : "Send"}</span>
                           </button>
                         </div>
+                      </div>
+                    ) : (
+                      /* Receptionist View-Only Notice */
+                      <div
+                        style={{
+                          marginBottom: "12px",
+                          padding: "10px 14px",
+                          backgroundColor: "#111b21",
+                          border: "1px dashed #2a3942",
+                          borderRadius: "8px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "11.5px",
+                          color: "#8696a0",
+                          flexWrap: "wrap",
+                          gap: "6px",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>👁️</span>
+                          <strong>Reception Desk (View-Only):</strong> Full consultation dialogue visible. Patient replies sync automatically via Freshdesk.
+                        </span>
+                        <span style={{ fontSize: "10.5px", color: "#64748b" }}>Replies dispatched by attending physicians</span>
                       </div>
                     )}
 
@@ -3957,23 +4017,8 @@ interface ArtTaskLog {
                       <span>
                         Received: {u.createdAt ? new Date(u.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
                       </span>
-                      {isDoctorRole ? (
+                      {canReplyToPatient ? (
                         <div style={{ display: "flex", gap: "6px" }}>
-                          <button
-                            className="action-sub-btn"
-                            style={{ backgroundColor: isReplying ? "var(--ink-200)" : undefined }}
-                            onClick={() => {
-                              if (isReplying) {
-                                setActiveReplyTicketId(null);
-                                setReplyMessageText("");
-                              } else {
-                                setActiveReplyTicketId(u.id);
-                                setReplyMessageText("");
-                              }
-                            }}
-                          >
-                            {isReplying ? "Close Reply Box" : "Reply to Message"}
-                          </button>
                           <button
                             className="action-sub-btn"
                             onClick={() => setToast(`Clinical review recorded for ticket #${u.id}.`)}

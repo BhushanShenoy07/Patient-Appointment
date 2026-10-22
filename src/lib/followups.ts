@@ -506,6 +506,9 @@ function saveTicketsToDisk(tickets: any[]) {
 export function invalidateTicketsCache() {
   globalThis.__clinicTicketsCache = [];
   globalThis.__clinicTicketsCacheTime = 0;
+  if (globalThis.__clinicConversationCache) {
+    globalThis.__clinicConversationCache.clear();
+  }
   try {
     if (fs.existsSync(DISK_CACHE_PATH)) fs.unlinkSync(DISK_CACHE_PATH);
   } catch {}
@@ -582,6 +585,22 @@ export async function getClinicTicketsWithConversations(limit = 30) {
           t.stats && (t.stats.agent_responded_at || t.stats.requester_responded_at || t.stats.first_responded_at)
         );
 
+        const requester = t.requester || {};
+        const cleanBody = (t.description_text || t.description || "")
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]*>/g, " ")
+          .replace(/&nbsp;/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        const baseDoctor = extractAttendingDoctor({
+          subject: t.subject,
+          description: t.description,
+          description_text: t.description_text,
+          message: cleanBody,
+          tags: Array.isArray(t.tags) ? t.tags : [],
+        });
+
         if (hasRealReplies) {
           const cached = conversationCache.get(String(t.id));
           if (cached && cached.updatedAt === t.updated_at) {
@@ -592,12 +611,19 @@ export async function getClinicTicketsWithConversations(limit = 30) {
               if (Array.isArray(convRes)) {
                 conversations = convRes.map((c: any) => {
                   const rawMsg = (c.body_text || c.body || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-                  const sentMatch = rawMsg.match(/— Sent by (.*?)(?:\n|$)/);
-                  const sender = sentMatch ? sentMatch[1].trim() : (c.from_email || (c.incoming ? (t.requester?.name || "Patient / Doctor") : "Doctor / Staff"));
+                  const sentMatch = rawMsg.match(/—\s*(?:Sent by\s+)?(.*?)(?:\s*\(Attending Physician\)|\r?\n|$)/i);
+                  const isOut = !c.incoming;
+                  let sender = "";
+                  if (isOut) {
+                    sender = sentMatch ? sentMatch[1].trim() : (baseDoctor || "Attending Physician");
+                  } else {
+                    sender = requester.name || t.name || (c.from_email && !c.from_email.includes("support@") ? c.from_email : "Patient");
+                  }
                   return {
                     id: String(c.id),
                     incoming: Boolean(c.incoming),
-                    from: c.incoming ? (t.requester?.name || "Patient / Doctor") : sender,
+                    from: sender,
+                    fromEmail: c.from_email || "",
                     message: rawMsg,
                     createdAt: c.created_at,
                   };
@@ -610,14 +636,6 @@ export async function getClinicTicketsWithConversations(limit = 30) {
           }
         }
 
-        const requester = t.requester || {};
-        const cleanBody = (t.description_text || t.description || "")
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-          .replace(/<[^>]*>/g, " ")
-          .replace(/&nbsp;/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-
         const attendingDoctor = extractAttendingDoctor({
           subject: t.subject,
           description: t.description,
@@ -625,7 +643,7 @@ export async function getClinicTicketsWithConversations(limit = 30) {
           message: cleanBody,
           tags: Array.isArray(t.tags) ? t.tags : [],
           conversations,
-        });
+        }) || baseDoctor;
 
         return {
           id: String(t.id),
@@ -788,7 +806,7 @@ export async function replyToFreshdeskTicket(ticketId: number | string, replyMes
 
   const senderMatch = replyMessage.match(/—\s*Sent by\s+(.*?)(?:\r?\n|$)/i)?.[1]?.trim() || "Attending Physician";
   const cleanReply = replyMessage.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "").trim();
-  const formattedBody = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1e293b; line-height: 1.6;"><p style="margin: 0 0 14px 0;">${escapeHtml(cleanReply).replace(/\n/g, "<br/>")}</p><p style="margin: 0; font-size: 13px; color: #0284c7; font-weight: 600;">— ${escapeHtml(senderMatch)} (Attending Physician)</p></div>`;
+  const formattedBody = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1e293b; line-height: 1.6;"><p style="margin: 0 0 14px 0;">${escapeHtml(cleanReply).replace(/\n/g, "<br/>")}</p><p style="margin: 0; font-size: 13px; color: #0284c7; font-weight: 600;">— Sent by ${escapeHtml(senderMatch)} (Attending Physician)</p></div>`;
 
   // Look up cached ticket FIRST from memory or disk fallback
   const disk = getTicketsFromDisk();
