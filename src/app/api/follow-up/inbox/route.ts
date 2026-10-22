@@ -74,6 +74,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = readClinicSession(request);
   if (!session) return NextResponse.json({ error: "Sign in to dispatch clinic messages." }, { status: 401 });
+  if (session.role !== "doctor") {
+    return NextResponse.json({ error: "Clinical care replies may only be dispatched by physicians. Reception desk has view-only access." }, { status: 403 });
+  }
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -84,12 +87,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ticket ID and reply content are required." }, { status: 400 });
     }
 
-    const senderTitle =
-      session.role === "doctor" && session.doctorName
-        ? session.doctorName
-        : `Reception Desk (${session.name || "Receptionist"})`;
-
-    const formattedMessage = `${message}\n\n— Sent by ${senderTitle}`;
+    const doctorTitle = session.doctorName || "Attending Physician";
+    const formattedMessage = `${message}\n\n— Sent by ${doctorTitle}`;
 
     const res = await replyToFreshdeskTicket(ticketId, formattedMessage);
     return NextResponse.json({ ok: true, id: res?.id, message: "Reply successfully delivered via Freshdesk." });

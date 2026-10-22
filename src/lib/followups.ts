@@ -786,25 +786,9 @@ export async function replyToFreshdeskTicket(ticketId: number | string, replyMes
   const cleanId = rawId.replace(/^fs_/, "").replace(/[^0-9]/g, "");
   if (!cleanId) throw new Error("Invalid ticket ID for reply.");
 
-  const senderMatch = replyMessage.match(/—\s*Sent by\s+(.*?)(?:\r?\n|$)/i)?.[1]?.trim() || "Clinic Care Team";
+  const senderMatch = replyMessage.match(/—\s*Sent by\s+(.*?)(?:\r?\n|$)/i)?.[1]?.trim() || "Attending Physician";
   const cleanReply = replyMessage.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "").trim();
-  const formattedBody = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f172a; border-radius: 14px; padding: 18px; color: #f8fafc;">
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <span style="font-size: 18px;">💬</span>
-        <div>
-          <div style="font-size: 14px; font-weight: 700; color: #ffffff;">${escapeHtml(senderMatch)}</div>
-          <div style="font-size: 11px; color: #94a3b8;">Clinic Desk Live Connect</div>
-        </div>
-      </div>
-      <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; border-top-left-radius: 4px; padding: 14px; color: #f1f5f9; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">
-${escapeHtml(cleanReply)}
-      </div>
-      <div style="margin-top: 10px; font-size: 11px; color: #64748b; text-align: right;">
-        Delivered via Freshdesk · Reply directly to this email to chat back
-      </div>
-    </div>
-  `;
+  const formattedBody = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #1e293b; line-height: 1.6;"><p style="margin: 0 0 14px 0;">${escapeHtml(cleanReply).replace(/\n/g, "<br/>")}</p><p style="margin: 0; font-size: 13px; color: #0284c7; font-weight: 600;">— ${escapeHtml(senderMatch)} (Attending Physician)</p></div>`;
 
   // Look up cached ticket FIRST from memory or disk fallback
   const disk = getTicketsFromDisk();

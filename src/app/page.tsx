@@ -1567,6 +1567,7 @@ interface ArtTaskLog {
   }
 
   async function submitTicketReply(ticketId: string, recipientName: string) {
+    if (!isDoctorRole) return;
     if (!replyMessageText.trim()) return;
     const msgToSend = replyMessageText.trim();
     setSendingReply(true);
@@ -3808,7 +3809,12 @@ interface ArtTaskLog {
                       {/* Conversation Dialogue (Incoming / Outgoing styled like Live Connect) */}
                       {hasConversations && u.conversations!.map(c => {
                         const rawMsg = c.message || "";
-                        const cleanedBody = rawMsg.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "").trim();
+                        let cleanedBody = rawMsg
+                          .replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "")
+                          .replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "")
+                          .replace(/Delivered via Freshdesk[\s\S]*$/i, "")
+                          .replace(/^[\s\S]*?Clinic Desk Live Connect\s*/i, "")
+                          .trim();
                         const doctorMatch = rawMsg.match(/—\s*Sent by\s+(.*?)(?:\r?\n|$)/i)?.[1]?.trim() || "";
                         const fromStr = (c.from || "").trim();
 
@@ -3874,13 +3880,15 @@ interface ArtTaskLog {
                       {/* If no body and no conversations */}
                       {!Boolean(u.message && u.message.trim().length > 0) && !hasConversations && (
                         <div style={{ textAlign: "center", padding: "12px", color: "var(--ink-400)", fontSize: "12px" }}>
-                          No conversation history yet. Click &quot;Reply to Message&quot; to write to the patient.
+                          {isDoctorRole
+                            ? "No conversation history yet. Click \"Reply to Message\" to write to the patient."
+                            : "No conversation history yet. Awaiting patient or physician message."}
                         </div>
                       )}
                     </div>
 
-                    {/* Inline Reply Composer (when open) */}
-                    {isReplying && (
+                    {/* Inline Reply Composer (exclusively for attending physicians) */}
+                    {isDoctorRole && isReplying && (
                       <div
                         style={{
                           marginTop: "12px",
@@ -3949,29 +3957,35 @@ interface ArtTaskLog {
                       <span>
                         Received: {u.createdAt ? new Date(u.createdAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
                       </span>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <button
-                          className="action-sub-btn"
-                          style={{ backgroundColor: isReplying ? "var(--ink-200)" : undefined }}
-                          onClick={() => {
-                            if (isReplying) {
-                              setActiveReplyTicketId(null);
-                              setReplyMessageText("");
-                            } else {
-                              setActiveReplyTicketId(u.id);
-                              setReplyMessageText("");
-                            }
-                          }}
-                        >
-                          {isReplying ? "Close Reply Box" : "Reply to Message"}
-                        </button>
-                        <button
-                          className="action-sub-btn"
-                          onClick={() => setToast(`Clinical review recorded for ticket #${u.id}.`)}
-                        >
-                          Acknowledge
-                        </button>
-                      </div>
+                      {isDoctorRole ? (
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            className="action-sub-btn"
+                            style={{ backgroundColor: isReplying ? "var(--ink-200)" : undefined }}
+                            onClick={() => {
+                              if (isReplying) {
+                                setActiveReplyTicketId(null);
+                                setReplyMessageText("");
+                              } else {
+                                setActiveReplyTicketId(u.id);
+                                setReplyMessageText("");
+                              }
+                            }}
+                          >
+                            {isReplying ? "Close Reply Box" : "Reply to Message"}
+                          </button>
+                          <button
+                            className="action-sub-btn"
+                            onClick={() => setToast(`Clinical review recorded for ticket #${u.id}.`)}
+                          >
+                            Acknowledge
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: "11px", color: "var(--ink-500)", background: "var(--surface-subtle)", border: "1px solid var(--line-200)", padding: "3px 8px", borderRadius: "4px" }}>
+                          👁️ Care Continuity Thread · Receptionist View
+                        </span>
+                      )}
                     </div>
                   </article>
                 );
