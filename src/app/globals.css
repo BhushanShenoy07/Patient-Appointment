@@ -200,10 +200,23 @@ input:focus, select:focus, textarea:focus {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background-color: #10b981;
   border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px #10b981;
   flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.sidebar-status-dot.online {
+  background-color: #10b981;
+  box-shadow: 0 0 0 1px #10b981, 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.sidebar-status-dot.offline {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444, 0 0 6px rgba(239, 68, 68, 0.35);
+}
+
+[data-theme="dark"] .sidebar-status-dot {
+  border-color: #0f172a;
 }
 
 /* SIDEBAR NAVIGATION MENU */
@@ -1878,9 +1891,16 @@ input:focus, select:focus, textarea:focus {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #10b981;
   border: 2px solid #ffffff;
+  transition: all 0.2s ease;
+}
+.chat-online-indicator.online {
+  background: #10b981;
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3);
+}
+.chat-online-indicator.offline {
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
 }
 
 .chat-main-pane {
@@ -2859,39 +2879,48 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* ==========================================================================
-   FIXED TOP-RIGHT SIGN OUT BUTTON
+   RED SIGN OUT ICON BUTTON NEAR MEDICARE DESK (SAVES SPACE)
    ========================================================================== */
-/* Sign Out Button in Action Bar */
-.pill-btn-signout {
-  border-color: rgba(239, 68, 68, 0.35) !important;
-  color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.04) !important;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+.brand-signout-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+  margin-left: auto;
+  outline: none;
 }
 
-.pill-btn-signout:hover {
-  background: #ef4444 !important;
-  border-color: #dc2626 !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3) !important;
-  transform: translateY(-1px);
+.brand-signout-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+  transform: scale(1.06);
 }
 
-.pill-btn-signout:active {
-  transform: translateY(0);
+.brand-signout-btn:active {
+  transform: scale(0.96);
 }
 
-[data-theme="dark"] .pill-btn-signout {
-  border-color: rgba(248, 113, 113, 0.35) !important;
-  color: #f87171 !important;
-  background: rgba(239, 68, 68, 0.08) !important;
+[data-theme="dark"] .brand-signout-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #f87171;
 }
 
-[data-theme="dark"] .pill-btn-signout:hover {
-  background: #dc2626 !important;
-  border-color: #b91c1c !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4) !important;
+[data-theme="dark"] .brand-signout-btn:hover {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45);
 }
 
 .fixed-top-signout-btn {

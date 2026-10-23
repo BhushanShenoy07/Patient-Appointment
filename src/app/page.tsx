@@ -559,7 +559,11 @@ function Avatar({ person, online, large }: { person: Person; online?: boolean; l
   return (
     <div className={`chat-avatar-container ${person.role === "receptionist" ? "receptionist" : ""} ${large ? "large" : ""}`}>
       {initials(person.name)}
-      {online && <span className="chat-online-indicator" title="Online" aria-label="Online" />}
+      <span
+        className={`chat-online-indicator ${online ? "online" : "offline"}`}
+        title={online ? "Online" : "Offline"}
+        aria-label={online ? "Online" : "Offline"}
+      />
     </div>
   );
 }
@@ -3193,42 +3197,54 @@ interface ArtTaskLog {
   const isDoctorRole = user.role === "doctor";
   const canReplyToPatient = user.role !== "receptionist";
   const unreadArtCount = artMessages.filter(m => !m.read && m.direction === "in").length;
+  const isUserOnline = artStatus.startsWith("connected") || (user.artUsername ? onlineUsers.has(user.artUsername.toLowerCase()) : true);
 
   return (
     <div className="dashboard-app-canvas">
       <div className="dashboard-frame">
         {/* SIDEBAR (MEDICARE / HEALTH CARE_ STYLE) */}
         <aside className="dashboard-sidebar">
-          {/* BRAND */}
+          {/* BRAND WITH RED ICON-ONLY SIGN OUT BUTTON */}
           <div className="sidebar-brand-block">
-            <div className="sidebar-brand-icon">
-              <IconCross size={18} />
-            </div>
-            <div>
-              <div className="sidebar-brand-name">Medicare Desk</div>
-              <div className="sidebar-brand-tag">
-                {isDoctorRole ? "Doctor Chamber" : "Clinical Center"}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
+              <div className="sidebar-brand-icon">
+                <IconCross size={18} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div className="sidebar-brand-name">Medicare Desk</div>
+                <div className="sidebar-brand-tag">
+                  {isDoctorRole ? "Doctor Chamber" : "Clinical Center"}
+                </div>
               </div>
             </div>
+
+            {/* Red Sign Out Icon Button (no text, saves space) */}
+            <button
+              type="button"
+              className="brand-signout-btn"
+              onClick={() => void signOut()}
+              title={`Sign out (${user.name || user.email})`}
+              aria-label="Sign out"
+            >
+              <IconLogOut size={16} />
+            </button>
           </div>
 
-          {/* DOCTOR / RECEPTIONIST PROFILE WIDGET (Image 2 Style) */}
+          {/* DOCTOR / RECEPTIONIST PROFILE WIDGET (Image 2 Style - Green/Red Dot Only) */}
           <div className="sidebar-doctor-widget">
             <div className="sidebar-doctor-avatar">
               {(user.doctorName || user.name || "D").slice(0, 1).toUpperCase()}
             </div>
             <div className="sidebar-doctor-meta">
               <div className="sidebar-doctor-name">{user.doctorName || user.name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div className="sidebar-doctor-role">
-                  {user.role === "doctor" ? "Physician · MD" : "Front Desk Coordinator"}
-                </div>
-                <span className="clinical-badge completed" style={{ fontSize: "9.5px", padding: "1px 5px", lineHeight: "1.2" }}>
-                  ● Online
-                </span>
+              <div className="sidebar-doctor-role">
+                {user.role === "doctor" ? "Physician · MD" : "Front Desk Coordinator"}
               </div>
             </div>
-            <div className="sidebar-status-dot online" title="Status: Online & Ready" />
+            <div
+              className={`sidebar-status-dot ${isUserOnline ? "online" : "offline"}`}
+              title={isUserOnline ? "Online" : "Offline"}
+            />
           </div>
 
           {/* NAVIGATION MENU */}
@@ -3330,12 +3346,12 @@ interface ArtTaskLog {
               </h1>
             </div>
 
-            {/* Real-time Staff Presence Indicator */}
+            {/* Real-time Staff Presence Indicator (Green Dot = Online, Red Dot = Offline, No wordy text) */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 auto 0 16px" }}>
               {isDoctorRole ? (
                 (() => {
                   const recep = people.find(p => p.role === "receptionist");
-                  const isRecepOnline = recep && onlineUsers.has(recep.artUsername.toLowerCase());
+                  const isRecepOnline = Boolean(recep && onlineUsers.has(recep.artUsername.toLowerCase()));
                   return (
                     <div
                       style={{
@@ -3349,18 +3365,29 @@ interface ArtTaskLog {
                         border: "1px solid var(--line-200)",
                         boxShadow: "var(--shadow-xs)",
                       }}
+                      title={isRecepOnline ? "Reception Desk: Online" : "Reception Desk: Offline"}
                     >
-                      <span style={{ color: "var(--ink-500)", fontWeight: 500 }}>Reception Desk ({recep?.name || "Front Desk"}):</span>
-                      <span style={{ fontWeight: 700, color: isRecepOnline ? "var(--emerald-600)" : "var(--ink-400)", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: isRecepOnline ? "var(--emerald-500)" : "var(--ink-400)" }} />
-                        {isRecepOnline ? "Online" : "Away"}
+                      <span style={{ color: "var(--ink-500)", fontWeight: 500 }}>
+                        Reception Desk ({recep?.name?.split(" ")[0] || "Vrushali"}):
                       </span>
+                      <span
+                        className={`presence-dot ${isRecepOnline ? "online" : "offline"}`}
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: isRecepOnline ? "#10b981" : "#ef4444",
+                          boxShadow: isRecepOnline ? "0 0 0 2px rgba(16, 185, 129, 0.25)" : "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                          display: "inline-block",
+                        }}
+                      />
                     </div>
                   );
                 })()
               ) : (
                 (() => {
-                  const onlineDocs = people.filter(p => p.role === "doctor" && onlineUsers.has(p.artUsername.toLowerCase()));
+                  const activeDoc = people.find(p => p.role === "doctor" && onlineUsers.has(p.artUsername.toLowerCase()));
+                  const isAnyDocOnline = Boolean(activeDoc);
                   return (
                     <div
                       style={{
@@ -3374,12 +3401,22 @@ interface ArtTaskLog {
                         border: "1px solid var(--line-200)",
                         boxShadow: "var(--shadow-xs)",
                       }}
+                      title={isAnyDocOnline ? `Doctor Chamber (${activeDoc?.name || "Dr. Bhushan"}): Online` : "Doctor Chamber: Offline"}
                     >
-                      <span style={{ color: "var(--ink-500)", fontWeight: 500 }}>Physicians Online:</span>
-                      <span style={{ fontWeight: 700, color: onlineDocs.length > 0 ? "var(--emerald-600)" : "var(--ink-400)", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: onlineDocs.length > 0 ? "var(--emerald-500)" : "var(--ink-400)" }} />
-                        {onlineDocs.length > 0 ? `${onlineDocs.length} Active (${onlineDocs.map(d => d.name.replace(/^dr\.?\s*/i, "")).join(", ")})` : "None Active"}
+                      <span style={{ color: "var(--ink-500)", fontWeight: 500 }}>
+                        Doctor Chamber ({activeDoc ? activeDoc.name.replace(/^dr\.?\s*/i, "") : "Dr. Bhushan"}):
                       </span>
+                      <span
+                        className={`presence-dot ${isAnyDocOnline ? "online" : "offline"}`}
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: isAnyDocOnline ? "#10b981" : "#ef4444",
+                          boxShadow: isAnyDocOnline ? "0 0 0 2px rgba(16, 185, 129, 0.25)" : "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                          display: "inline-block",
+                        }}
+                      />
                     </div>
                   );
                 })()
@@ -3467,17 +3504,6 @@ interface ArtTaskLog {
               >
                 <IconRefresh size={12} />
                 <span>{busy ? "Syncing…" : "Sync"}</span>
-              </button>
-
-              <button
-                type="button"
-                className="pill-btn-secondary pill-btn-signout"
-                onClick={() => void signOut()}
-                title={`Sign out (${user.name || user.email})`}
-                aria-label="Sign out"
-              >
-                <IconLogOut size={13} />
-                <span>Sign out</span>
               </button>
             </div>
           </header>
