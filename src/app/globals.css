@@ -3244,7 +3244,7 @@ input:focus, select:focus, textarea:focus {
 /* Play Buttons Row */
 .cute-bot-play-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 10px;
   width: 100%;
 }
@@ -3254,17 +3254,18 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 7px 10px;
+  gap: 4px;
+  padding: 7px 5px;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #334155;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  white-space: nowrap;
 }
 
 .cute-bot-play-btn:hover {
@@ -3288,6 +3289,12 @@ input:focus, select:focus, textarea:focus {
   border-color: #38bdf8;
   background: #f0f9ff;
   color: #0284c7;
+}
+
+.cute-bot-play-btn.sync:hover {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #047857;
 }
 
 /* ==========================================================================

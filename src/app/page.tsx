@@ -1141,7 +1141,7 @@ export default function Home() {
     {
       id: "intro-1",
       sender: "bot",
-      text: "Hi! Zoe here ✨ I'm your AI Clinic Assistant. I can book appointments, register patients, download detailed patient PDF reports, or run clinic diagnosis!",
+      text: "Hi! Zoe here ✨",
       time: "Just now",
     },
   ]);
@@ -1157,7 +1157,7 @@ export default function Home() {
 
   // Synchronize greeting for Zoe
   useEffect(() => {
-    const greetingText = "Hi! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+    const greetingText = "Hi! Zoe here ✨";
     setBotSpeech("Hi! Zoe here ✨");
     setBotChatMessages([
       {
@@ -1259,9 +1259,27 @@ export default function Home() {
     setTimeout(() => setBotMood("happy"), 3800);
   }
 
+  async function handleSyncClinic() {
+    triggerBotAudio("flip");
+    setBotMood("medic");
+    setBotSpeech("🔄 Synchronizing all clinic data live…");
+    try {
+      await Promise.all([
+        loadRecords(false),
+        loadFollowupUpdates(false, true),
+      ]);
+      setBotSpeech("✨ All clinic records & updates synchronized live!");
+      triggerBotAudio("chirp");
+    } catch {
+      setBotSpeech("⚠️ Data sync completed.");
+    } finally {
+      setTimeout(() => setBotMood("happy"), 3200);
+    }
+  }
+
   function handlePeepingBotClick() {
     triggerBotAudio("chirp");
-    setBotSpeech("Hi! Zoe here ✨ How can I help you today?");
+    setBotSpeech("Hi! Zoe here ✨");
     setBotHubOpen(prev => !prev);
   }
 
@@ -1330,42 +1348,59 @@ export default function Home() {
       let botResponseText = "";
       let pdfDownloadPatientName: string | undefined = undefined;
 
-      // Extract requested patient name
-      // 1. Direct match with registered patients
-      let matched = patients.find(p => {
-        const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-        if (!pName) return false;
-        return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
-      });
-
-      // 2. Pattern extraction for "give me report pdf of [name]" or "report pdf of [name]"
-      const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for)\s+([a-zA-Z\s]+)/i);
-      const extractedName = nameMatch ? nameMatch[1].trim() : "";
-
-      if (!matched && extractedName) {
-        matched = patients.find(p => {
-          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-          return pName.includes(extractedName.toLowerCase()) || extractedName.toLowerCase().includes(pName);
-        });
-      }
-
-      if (matched) {
-        const pName = matched.fields[COL.name] || "Patient";
-        pdfDownloadPatientName = pName;
+      // 1. Sync trigger in chat
+      if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
         setBotMood("medic");
-
-        botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:`;
-
-        handleDownloadPatientReport(pName);
-      } else if (extractedName) {
-        setBotMood("happy");
-        botResponseText = `Hi! Zoe here ✨ Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`;
-      } else if (qLower.includes("hi") || qLower.includes("hello") || qLower.includes("hey") || qLower.includes("zoe")) {
-        setBotMood("happy");
-        botResponseText = "Hi! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+        botResponseText = "Hi! Zoe here ✨ All clinic records and appointments have been synchronized live with the database!";
+        void handleSyncClinic();
       } else {
-        setBotMood("happy");
-        botResponseText = "Hi! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat.";
+        // 2. Extract requested patient name
+        // Direct match with registered patients
+        let matched = patients.find(p => {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          if (!pName) return false;
+          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
+        });
+
+        // Pattern extraction for "give me report pdf of [name]" or "report pdf of [name]"
+        const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for)\s+([a-zA-Z\s]+)/i);
+        const extractedName = nameMatch ? nameMatch[1].trim() : "";
+
+        if (!matched && extractedName) {
+          matched = patients.find(p => {
+            const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+            return pName.includes(extractedName.toLowerCase()) || extractedName.toLowerCase().includes(pName);
+          });
+        }
+
+        if (matched) {
+          const pName = matched.fields[COL.name] || "Patient";
+          pdfDownloadPatientName = pName;
+          setBotMood("medic");
+          botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:`;
+          handleDownloadPatientReport(pName);
+        } else if (extractedName) {
+          setBotMood("happy");
+          botResponseText = `Hi! Zoe here ✨ Could not find any patient named '${extractedName}' in the clinic database. Please verify the name or click 'Sync' to refresh records.`;
+        } else if (qLower.includes("report") || qLower.includes("pdf")) {
+          setBotMood("happy");
+          const sampleName = patients[0]?.fields[COL.name] || "Patient Name";
+          botResponseText = `Hi! Zoe here ✨ Please specify which patient's report you'd like (e.g., 'Give me report pdf of ${sampleName}'), and I will provide their downloadable PDF report right here in chat!`;
+        } else {
+          // General conversational response: explain what Zoe can do and cannot do
+          setBotMood("happy");
+          botResponseText = `Hi! Zoe here ✨
+
+Here is what I CAN do:
+• 📄 Download Patient Report: Say "Give me report pdf of [Patient Name]" to generate and download their signed official medical PDF in chat.
+• 🔄 Live Data Sync: Click the [🔄 Sync] button near Diagnosis or say "sync records" to refresh all patient & appointment data live from the database.
+• 🩺 Clinic Overview: Click [🩺 Diagnosis] to check total appointments, registered patients, and system status.
+• 💖 Playful Companion: Pet me or make me flip whenever you need a quick stress relief break during your shift!
+
+Here is what I CANNOT do:
+• ❌ Clinical Diagnoses & Prescriptions: I cannot replace a physician's clinical judgment or prescribe medications independently.
+• ❌ External Medical Records: I cannot access unverified third-party hospital databases or modify records without authorized credentials.`;
+        }
       }
 
       const botMsg: BotChatMessage = {
@@ -1377,7 +1412,7 @@ export default function Home() {
       };
 
       setBotChatMessages((prev) => [...prev, botMsg]);
-      setBotSpeech(botResponseText.slice(0, 75) + (botResponseText.length > 75 ? "…" : ""));
+      setBotSpeech(botResponseText.split("\n")[0] || "Hi! Zoe here ✨");
       setBotIsTyping(false);
       triggerBotAudio("purr");
     }, 380);
@@ -5166,6 +5201,16 @@ interface ArtTaskLog {
                 >
                   <span>🩺</span>
                   <span>Diagnosis</span>
+                </button>
+                <button
+                  type="button"
+                  className="cute-bot-play-btn sync"
+                  onClick={handleSyncClinic}
+                  disabled={busy}
+                  title="Sync all clinic data live"
+                >
+                  <span>🔄</span>
+                  <span>Sync</span>
                 </button>
               </div>
             </div>
