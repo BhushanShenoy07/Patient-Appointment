@@ -1155,14 +1155,10 @@ export default function Home() {
     }
   }, [botChatMessages, botHubOpen, botIsTyping]);
 
-  // Synchronize role-based greeting for Doctor vs Receptionist
+  // Synchronize greeting for Zoe
   useEffect(() => {
-    if (!user) return;
-    const isDoc = user.role === "doctor";
-    const greetingText = isDoc
-      ? "Hi Doc! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat."
-      : "Hi Ma'am! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
-    setBotSpeech(isDoc ? "Hi Doc! Zoe here ✨" : "Hi Ma'am! Zoe here ✨");
+    const greetingText = "Hi! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+    setBotSpeech("Hi! Zoe here ✨");
     setBotChatMessages([
       {
         id: "intro-zoe",
@@ -1265,8 +1261,7 @@ export default function Home() {
 
   function handlePeepingBotClick() {
     triggerBotAudio("chirp");
-    const isDoc = user?.role === "doctor";
-    setBotSpeech(isDoc ? "Hi Doc! Zoe here ✨ How can I help you today?" : "Hi Ma'am! Zoe here ✨ How can I help you today?");
+    setBotSpeech("Hi! Zoe here ✨ How can I help you today?");
     setBotHubOpen(prev => !prev);
   }
 
@@ -1288,6 +1283,9 @@ export default function Home() {
         )
       : [];
 
+    const attendingDoc = pAppts[0]?.fields[COL.doctor] || (user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D.");
+    const verifyingRecep = (user?.role === "receptionist" ? user.name : undefined) || people.find(p => p.role === "receptionist")?.name || "Vrushali Patil";
+
     downloadPatientPdf({
       patientName: actualName,
       patientAge: matched?.fields[COL.age],
@@ -1298,12 +1296,13 @@ export default function Home() {
       medicalNotes: matched?.fields[COL.notes],
       appointments: pAppts.map(a => ({
         date: a.fields[COL.date] || "",
-        doctor: a.fields[COL.doctor] || "Consultant Physician",
+        doctor: a.fields[COL.doctor] || attendingDoc,
         mode: modeOf(a.fields),
-        status: a.fields[COL.status] || "Scheduled",
+        status: a.fields[COL.status] || "Completed",
         notes: a.fields[COL.notes] || "",
       })),
-      staffName: user?.doctorName || user?.name || (user?.role === "doctor" ? "Attending Physician" : "Clinic Reception Desk"),
+      doctorName: attendingDoc,
+      receptionistName: verifyingRecep,
     });
 
     setToast(`📥 Downloaded Medical Report PDF for ${actualName}`);
@@ -1326,7 +1325,6 @@ export default function Home() {
     setBotIsTyping(true);
 
     const qLower = query.toLowerCase();
-    const isDoc = user?.role === "doctor";
 
     setTimeout(() => {
       let botResponseText = "";
@@ -1356,26 +1354,18 @@ export default function Home() {
         pdfDownloadPatientName = pName;
         setBotMood("medic");
 
-        botResponseText = isDoc
-          ? `Hi Doc! Here is the medical report PDF for ${pName}:`
-          : `Hi Ma'am! Here is the medical report PDF for ${pName}:`;
+        botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:`;
 
         handleDownloadPatientReport(pName);
       } else if (extractedName) {
         setBotMood("happy");
-        botResponseText = isDoc
-          ? `Hi Doc! Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`
-          : `Hi Ma'am! Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`;
+        botResponseText = `Hi! Zoe here ✨ Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`;
       } else if (qLower.includes("hi") || qLower.includes("hello") || qLower.includes("hey") || qLower.includes("zoe")) {
         setBotMood("happy");
-        botResponseText = isDoc
-          ? "Hi Doc! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat."
-          : "Hi Ma'am! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+        botResponseText = "Hi! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
       } else {
         setBotMood("happy");
-        botResponseText = isDoc
-          ? "Hi Doc! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat."
-          : "Hi Ma'am! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat.";
+        botResponseText = "Hi! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat.";
       }
 
       const botMsg: BotChatMessage = {
@@ -5056,16 +5046,10 @@ interface ArtTaskLog {
         <div
           className="peeping-bot-bubble"
           onClick={handlePeepingBotClick}
-          title="Click Zoe to play & automate!"
+          title="Click Zoe to assist & automate!"
         >
           <span style={{ fontSize: "13px" }}>✨</span>
-          <span>
-            {botMood === "pet"
-              ? "Yay! (≧◡≦)"
-              : user?.role === "doctor"
-              ? "Hi Doc! Zoe here ✨"
-              : "Hi Ma'am! Zoe here ✨"}
-          </span>
+          <span>{botMood === "pet" ? "Yay! (≧◡≦)" : "Hi! Zoe here ✨"}</span>
         </div>
 
         {/* Mascot Peeping Trigger Button */}
@@ -5073,7 +5057,7 @@ interface ArtTaskLog {
           type="button"
           className={`peeping-bot-trigger ${botIsFlipping ? "flipping" : ""}`}
           onClick={handlePeepingBotClick}
-          title="ZOE - Clinic AI Assistant & Automation Companion"
+          title="ZOE - Clinic AI Assistant"
           aria-label="Open ZOE Clinic Assistant"
         >
           <MediBotSvg
@@ -5098,9 +5082,7 @@ interface ArtTaskLog {
                 </div>
                 <div>
                   <div className="cute-bot-hub-title">ZOE AI Assistant</div>
-                  <div className="cute-bot-hub-subtitle">
-                    {user?.role === "doctor" ? "Physician AI Desk Companion" : "Reception Desk AI Companion"}
-                  </div>
+                  <div className="cute-bot-hub-subtitle">Clinic AI Companion</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
