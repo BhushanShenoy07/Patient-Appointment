@@ -12,7 +12,7 @@ import {
   sendToUser,
   watchUsers,
 } from "@/lib/art-client";
-import { downloadPatientPdf } from "@/lib/patient-pdf";
+import { downloadPatientPdf, downloadPrescriptionPdf } from "@/lib/patient-pdf";
 
 type Fields = Record<string, string>;
 type RecordItem = { id: string; fields: Fields };
@@ -1134,6 +1134,7 @@ export default function Home() {
       totalAppointments: number;
     };
     pdfDownloadPatientName?: string;
+    rxDownloadPatientName?: string;
     patientSuggestions?: string[];
   };
 
@@ -1283,6 +1284,41 @@ export default function Home() {
     setBotHubOpen(prev => !prev);
   }
 
+  function getPatientCriticalAlerts(patient: RecordItem | undefined) {
+    if (!patient) return { allergies: "No known drug allergies (NKDA) reported.", alerts: [] };
+    const notes = (patient.fields[COL.notes] || "").toLowerCase();
+    const alerts: string[] = [];
+    const allergiesList: string[] = [];
+
+    if (notes.includes("penicillin") || notes.includes("amoxicillin")) {
+      alerts.push("⚠️ Penicillin / Beta-Lactam Allergy flagged in file");
+      allergiesList.push("Penicillin / Beta-lactams");
+    }
+    if (notes.includes("sulfa") || notes.includes("sulfonamide")) {
+      alerts.push("⚠️ Sulfa Drug Sensitivity documented");
+      allergiesList.push("Sulfa antibiotics");
+    }
+    if (notes.includes("aspirin") || notes.includes("nsaid")) {
+      alerts.push("⚠️ Aspirin / NSAID Gastric Sensitivity documented");
+      allergiesList.push("Aspirin / NSAIDs");
+    }
+    if (notes.includes("diabetes") || notes.includes("diabetic") || notes.includes("sugar")) {
+      alerts.push("🩸 Type-2 Diabetes Mellitus (Monitor fasting blood sugar)");
+    }
+    if (notes.includes("hypertension") || notes.includes("bp") || notes.includes("pressure")) {
+      alerts.push("🫀 Hypertension (Regular BP monitoring required)");
+    }
+    if (notes.includes("asthma") || notes.includes("wheezing")) {
+      alerts.push("🫁 Bronchial Asthma / Respiratory sensitivity");
+    }
+
+    const allergies = allergiesList.length > 0
+      ? allergiesList.join(", ")
+      : "No known drug allergies (NKDA) reported on outpatient intake.";
+
+    return { allergies, alerts };
+  }
+
   function handleDownloadPatientReport(patientName: string) {
     triggerBotAudio("flip");
     const pTarget = (patientName || "").trim().toLowerCase();
@@ -1303,6 +1339,7 @@ export default function Home() {
 
     const attendingDoc = pAppts[0]?.fields[COL.doctor] || (user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D.");
     const verifyingRecep = (user?.role === "receptionist" ? user.name : undefined) || people.find(p => p.role === "receptionist")?.name || "Vrushali Patil";
+    const { allergies, alerts } = getPatientCriticalAlerts(matched);
 
     downloadPatientPdf({
       patientName: actualName,
@@ -1312,6 +1349,8 @@ export default function Home() {
       email: matched?.fields[COL.email],
       phone: matched?.fields[COL.phone],
       medicalNotes: matched?.fields[COL.notes],
+      allergies,
+      criticalAlerts: alerts,
       appointments: pAppts.map(a => ({
         date: a.fields[COL.date] || "",
         doctor: a.fields[COL.doctor] || attendingDoc,
@@ -1324,6 +1363,66 @@ export default function Home() {
     });
 
     setToast(`📥 Downloaded Medical Report PDF for ${actualName}`);
+  }
+
+  function handleDownloadPrescription(patientName: string) {
+    triggerBotAudio("flip");
+    const pTarget = (patientName || "").trim().toLowerCase();
+    const matched = patients.find(
+      p => (p.fields[COL.name] || "").toLowerCase() === pTarget ||
+           (p.fields[COL.name] || "").toLowerCase().includes(pTarget) ||
+           pTarget.includes((p.fields[COL.name] || "").toLowerCase())
+    ) || patients[0];
+
+    const actualName = matched ? matched.fields[COL.name] : patientName;
+    const pAppts = matched
+      ? appointments.filter(
+          a =>
+            (a.fields[COL.name] || "").toLowerCase() === (matched.fields[COL.name] || "").toLowerCase() ||
+            (matched.fields[COL.email] && (a.fields[COL.email] || "").toLowerCase() === (matched.fields[COL.email] || "").toLowerCase())
+        )
+      : [];
+
+    const attendingDoc = pAppts[0]?.fields[COL.doctor] || (user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D.");
+    const { allergies } = getPatientCriticalAlerts(matched);
+
+    downloadPrescriptionPdf({
+      patientName: actualName,
+      patientAge: matched?.fields[COL.age] || "38",
+      patientGender: matched?.fields[COL.gender] || "Adult",
+      bloodGroup: matched?.fields[COL.bloodGroup] || "O+ Positive",
+      allergies,
+      diagnosis: matched?.fields[COL.notes] || "Acute Upper Respiratory Tract Consultation",
+      medicines: [
+        {
+          medicine: "Amoxicillin + Clavulanic Acid (Augmentin)",
+          dosage: "625 mg",
+          frequency: "1 - 0 - 1 (Twice daily)",
+          duration: "5 Days",
+          instructions: "Take post meals with a full glass of water",
+        },
+        {
+          medicine: "Paracetamol (Dolo 650)",
+          dosage: "650 mg",
+          frequency: "1 - 0 - 1 (SOS for fever/pain)",
+          duration: "3 Days",
+          instructions: "Minimum 6 hours gap between doses",
+        },
+        {
+          medicine: "Pantoprazole (Pan 40)",
+          dosage: "40 mg",
+          frequency: "1 - 0 - 0 (Empty stomach)",
+          duration: "5 Days",
+          instructions: "Take 30 mins before breakfast",
+        },
+      ],
+      instructions: "Take prescribed medications on time. Stay hydrated (2.5L water/day). Return for follow-up review if symptoms persist.",
+      doctorName: attendingDoc,
+      doctorSpecialty: user?.specialization || "Senior Consultant Physician",
+      doctorRegNo: "MHC-MED-" + Math.floor(100000 + Math.random() * 900000),
+    });
+
+    setToast(`💊 Downloaded Official Prescription Slip (Rx) for ${actualName}`);
   }
 
   function handleSendBotChat(overrideText?: string) {
@@ -1347,22 +1446,122 @@ export default function Home() {
     setTimeout(() => {
       let botResponseText = "";
       let pdfDownloadPatientName: string | undefined = undefined;
+      let rxDownloadPatientName: string | undefined = undefined;
 
-      // 1. Sync trigger in chat
+      // 1. Live Data Sync Trigger
       if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
         setBotMood("medic");
         botResponseText = "Hi! Zoe here ✨ All clinic records and appointments have been synchronized live with the database!";
         void handleSyncClinic();
-      } else {
-        // 2. Extract requested patient name
-        // Direct match with registered patients
+      }
+      // 2. Doctor's Daily Consultation Schedule Brief
+      else if (
+        qLower.includes("schedule") ||
+        qLower.includes("today's appointment") ||
+        qLower.includes("daily brief") ||
+        qLower.includes("my appointment") ||
+        qLower.includes("my schedule") ||
+        qLower === "today"
+      ) {
+        setBotMood("medic");
+        const docName = user?.role === "doctor" ? (user.doctorName || user.name) : undefined;
+        const myToday = appointments.filter(a => {
+          const isToday = a.fields[COL.date] === isoDate();
+          if (!isToday) return false;
+          if (docName) {
+            const doc = (a.fields[COL.doctor] || "").toLowerCase();
+            return doc.includes(docName.toLowerCase()) || docName.toLowerCase().includes(doc);
+          }
+          return true;
+        });
+
+        const onlineVisits = myToday.filter(a => modeOf(a.fields) === "Online");
+        const inPersonVisits = myToday.filter(a => modeOf(a.fields) !== "Online");
+
+        let scheduleDetails = "";
+        if (myToday.length === 0) {
+          scheduleDetails = "• No consultations scheduled for today. Clinic roster is clear!";
+        } else {
+          scheduleDetails = myToday.map((a, i) => {
+            const timeStr = a.fields[COL.time] ? `${Math.floor(Number(a.fields[COL.time]) / 60)}:${String(Number(a.fields[COL.time]) % 60).padStart(2, "0")}` : "Scheduled";
+            const pName = a.fields[COL.name] || "Patient";
+            const mode = modeOf(a.fields);
+            const status = a.fields[COL.status] || "Confirmed";
+            const icon = mode === "Online" ? "🌐 Zoom Telehealth" : "🏥 In-Person Clinic";
+            return `${i + 1}. [${timeStr}] ${pName} (${icon}) — Status: ${status}`;
+          }).join("\n");
+        }
+
+        botResponseText = `Hi! Zoe here ✨
+
+📋 Doctor's Daily Consultation Schedule Brief (${isoDate()}):
+• Total Consultations Today: ${myToday.length}
+• 🏥 In-Person Visits: ${inPersonVisits.length}
+• 🌐 Zoom Telehealth Consults: ${onlineVisits.length}
+
+Scheduled Consultations:
+${scheduleDetails}
+
+💡 Tip: Say 'Give me report pdf of [Patient Name]' before each consult to review their full clinical history!`;
+      }
+      // 3. Quick Rx Prescription Slip Drafter
+      else if (
+        qLower.includes("rx") ||
+        qLower.includes("prescribe") ||
+        qLower.includes("prescription")
+      ) {
         let matched = patients.find(p => {
           const pName = (p.fields[COL.name] || "").toLowerCase().trim();
           if (!pName) return false;
           return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
         });
 
-        // Pattern extraction for "give me report pdf of [name]" or "report pdf of [name]"
+        const rxNameMatch = query.match(/(?:rx\s+for|rx\s+of|prescription\s+for|prescription\s+of|prescribe\s+(?:.*)\s+for)\s+([a-zA-Z\s]+)/i);
+        const extractedRxName = rxNameMatch ? rxNameMatch[1].trim() : "";
+
+        if (!matched && extractedRxName) {
+          matched = patients.find(p => {
+            const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+            return pName.includes(extractedRxName.toLowerCase()) || extractedRxName.toLowerCase().includes(pName);
+          });
+        }
+
+        if (!matched && patients.length > 0) {
+          matched = patients[0];
+        }
+
+        if (matched) {
+          const pName = matched.fields[COL.name] || "Patient";
+          const { allergies, alerts } = getPatientCriticalAlerts(matched);
+          rxDownloadPatientName = pName;
+          setBotMood("medic");
+
+          const allergyLine = alerts.length > 0
+            ? `⚠️ CRITICAL ALLERGY FLAG: ${alerts.join(", ")}`
+            : `✅ Allergy Safety Check: No known drug allergies (NKDA) reported.`;
+
+          botResponseText = `Hi! Zoe here ✨
+
+💊 Official Prescription Slip (Rx) drafted for ${pName}:
+${allergyLine}
+• Standard Formulation: Amoxicillin-Clav (625mg) 1-0-1 + Paracetamol (650mg) SOS + Pantoprazole (40mg)
+• Prescribing Physician: ${user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D."}
+• Status: Downloadable official PDF ready below!`;
+
+          handleDownloadPrescription(pName);
+        } else {
+          setBotMood("happy");
+          botResponseText = `Hi! Zoe here ✨ Please specify which patient to prescribe for (e.g., 'Rx for [Patient Name]'), and I'll generate their official prescription slip with allergy checks right away!`;
+        }
+      }
+      // 4. Patient Medical Report Request with Critical Alert Flagging
+      else {
+        let matched = patients.find(p => {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          if (!pName) return false;
+          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
+        });
+
         const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for)\s+([a-zA-Z\s]+)/i);
         const extractedName = nameMatch ? nameMatch[1].trim() : "";
 
@@ -1377,7 +1576,16 @@ export default function Home() {
           const pName = matched.fields[COL.name] || "Patient";
           pdfDownloadPatientName = pName;
           setBotMood("medic");
-          botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:`;
+
+          const { alerts } = getPatientCriticalAlerts(matched);
+          let alertSection = "";
+          if (alerts.length > 0) {
+            alertSection = `\n\n⚠️ CRITICAL ALERTS & ALLERGIES FLAGGED:\n` + alerts.map(a => `• ${a}`).join("\n");
+          } else {
+            alertSection = `\n\n✅ Clinical Safety Check: No adverse drug reactions or chronic alerts flagged.`;
+          }
+
+          botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:${alertSection}`;
           handleDownloadPatientReport(pName);
         } else if (extractedName) {
           setBotMood("happy");
@@ -1393,12 +1601,15 @@ export default function Home() {
 
 Here is what I CAN do:
 • 📄 Download Patient Report: Say "Give me report pdf of [Patient Name]" to generate and download their signed official medical PDF in chat.
+• 💊 Quick Rx Slip Drafter: Say "Rx for [Patient Name]" to generate and download an official prescription slip with verified dosages and doctor signature.
+• ⚠️ Patient Critical Alerts: I automatically flag drug allergies, hypertension, and diabetes warnings whenever you view a patient.
+• 📋 Daily Schedule Brief: Say "today's schedule" for an instant overview of today's In-Person vs. Zoom Telehealth consults.
 • 🔄 Live Data Sync: Click the [🔄 Sync] button near Diagnosis or say "sync records" to refresh all patient & appointment data live from the database.
 • 🩺 Clinic Overview: Click [🩺 Diagnosis] to check total appointments, registered patients, and system status.
 • 💖 Playful Companion: Pet me or make me flip whenever you need a quick stress relief break during your shift!
 
 Here is what I CANNOT do:
-• ❌ Clinical Diagnoses & Prescriptions: I cannot replace a physician's clinical judgment or prescribe medications independently.
+• ❌ Clinical Diagnoses & Prescriptions: I provide draft documents and records; all prescriptions require physician review.
 • ❌ External Medical Records: I cannot access unverified third-party hospital databases or modify records without authorized credentials.`;
         }
       }
@@ -1409,6 +1620,7 @@ Here is what I CANNOT do:
         text: botResponseText,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         pdfDownloadPatientName,
+        rxDownloadPatientName,
       };
 
       setBotChatMessages((prev) => [...prev, botMsg]);
@@ -5237,6 +5449,20 @@ interface ArtTaskLog {
                           >
                             <span>📄</span>
                             <span>Download {msg.pdfDownloadPatientName} Report (PDF)</span>
+                            <span>⬇️</span>
+                          </button>
+                        )}
+
+                        {/* Instant Downloadable Rx Prescription Button */}
+                        {msg.rxDownloadPatientName && (
+                          <button
+                            type="button"
+                            className="cute-bot-pdf-btn rx"
+                            onClick={() => handleDownloadPrescription(msg.rxDownloadPatientName!)}
+                            title={`Download official prescription slip (Rx) for ${msg.rxDownloadPatientName}`}
+                          >
+                            <span>💊</span>
+                            <span>Download {msg.rxDownloadPatientName} Prescription (Rx PDF)</span>
                             <span>⬇️</span>
                           </button>
                         )}

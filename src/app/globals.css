@@ -3643,6 +3643,16 @@ input:focus, select:focus, textarea:focus {
   transform: translateY(0);
 }
 
+.cute-bot-pdf-btn.rx {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+}
+
+.cute-bot-pdf-btn.rx:hover {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.45);
+}
+
 /* Quick Patient Select Pills */
 .cute-bot-patient-pills {
   display: flex;
