@@ -436,6 +436,15 @@ function IconArtLogo({ size = 16 }: { size?: number }) {
   );
 }
 
+function IconLock({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
 function IconSearch({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1108,6 +1117,36 @@ export default function Home() {
   ]);
   const [customMultiPrompt, setCustomMultiPrompt] = useState("");
   const [copiedAgentId, setCopiedAgentId] = useState(false);
+
+  // ART Analytics Screen Password Protection (password: abc@123)
+  const [artAnalyticsUnlocked, setArtAnalyticsUnlocked] = useState(false);
+  const [artPasswordModalOpen, setArtPasswordModalOpen] = useState(false);
+  const [artPasswordInput, setArtPasswordInput] = useState("");
+  const [artPasswordError, setArtPasswordError] = useState("");
+  const [showArtPassword, setShowArtPassword] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setArtAnalyticsUnlocked(sessionStorage.getItem("art_analytics_unlocked") === "true");
+    }
+  }, []);
+
+  const handleUnlockArtAnalytics = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (artPasswordInput.trim() === "abc@123") {
+      setArtAnalyticsUnlocked(true);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("art_analytics_unlocked", "true");
+      }
+      setTab("analytics");
+      setArtPasswordModalOpen(false);
+      setArtPasswordInput("");
+      setArtPasswordError("");
+      setToast("ART Analytics unlocked successfully!");
+    } else {
+      setArtPasswordError("Incorrect password. Access denied.");
+    }
+  };
 
   // Cute Playable Mascot Bot State & AI Chat Engine (ZOE)
   const [botHubOpen, setBotHubOpen] = useState(false);
@@ -3311,13 +3350,26 @@ interface ArtTaskLog {
               <button
                 type="button"
                 className={`sidebar-nav-link ${tab === "analytics" ? "active" : ""}`}
-                onClick={() => setTab("analytics")}
+                onClick={() => {
+                  if (artAnalyticsUnlocked) {
+                    setTab("analytics");
+                  } else {
+                    setArtPasswordModalOpen(true);
+                    setArtPasswordInput("");
+                    setArtPasswordError("");
+                  }
+                }}
               >
                 <div className="sidebar-link-icon"><IconArtLogo size={16} /></div>
                 <span className="sidebar-link-text">ART Analytics</span>
                 <span className="sidebar-link-badge" style={{ background: "rgba(13,148,136,0.15)", color: "var(--teal-700)", fontWeight: 700, fontSize: "10px" }}>
                   AI
                 </span>
+                {!artAnalyticsUnlocked && (
+                  <span style={{ marginLeft: "auto", fontSize: "11px", opacity: 0.65 }} title="Password protected (abc@123)">
+                    🔒
+                  </span>
+                )}
               </button>
             )}
           </nav>
@@ -4931,8 +4983,91 @@ interface ArtTaskLog {
           </div>
         )}
 
-        {/* TAB 6: ART ANALYTICS & OBSERVABILITY */}
-        {tab === "analytics" && !isDoctorRole && (() => {
+        {/* TAB 6: ART ANALYTICS & OBSERVABILITY (PASSWORD PROTECTED) */}
+        {tab === "analytics" && !isDoctorRole && (!artAnalyticsUnlocked ? (
+          <div className="card-panel" style={{ maxWidth: "440px", margin: "60px auto", textAlign: "center", padding: "36px 28px" }}>
+            <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "rgba(13, 148, 136, 0.12)", border: "1px solid rgba(13, 148, 136, 0.25)", display: "grid", placeItems: "center", margin: "0 auto 16px", color: "var(--teal-600)" }}>
+              <IconLock size={26} />
+            </div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--teal-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Restricted Clinical Telemetry
+            </div>
+            <h2 style={{ margin: "4px 0 8px", fontSize: "20px", fontWeight: 800, color: "var(--ink-900)" }}>
+              ART Analytics is Protected
+            </h2>
+            <p style={{ margin: "0 0 20px", color: "var(--ink-500)", fontSize: "12.5px", lineHeight: "1.5" }}>
+              Enter the access password to view real-time multi-agent execution telemetry and connected tool diagnostics.
+            </p>
+
+            <form onSubmit={handleUnlockArtAnalytics} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ position: "relative", textAlign: "left" }}>
+                <input
+                  type={showArtPassword ? "text" : "password"}
+                  autoFocus
+                  placeholder="Enter password..."
+                  value={artPasswordInput}
+                  onChange={(e) => {
+                    setArtPasswordInput(e.target.value);
+                    if (artPasswordError) setArtPasswordError("");
+                  }}
+                  style={{
+                    paddingRight: "40px",
+                    borderColor: artPasswordError ? "var(--rose-600)" : undefined,
+                    boxShadow: artPasswordError ? "0 0 0 3px rgba(239, 68, 68, 0.15)" : undefined,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowArtPassword(!showArtPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    color: "var(--ink-400)",
+                    padding: "4px",
+                  }}
+                  title={showArtPassword ? "Hide password" : "Show password"}
+                >
+                  {showArtPassword ? "👁️" : "🙈"}
+                </button>
+              </div>
+
+              {artPasswordError && (
+                <div style={{ fontSize: "12px", color: "var(--rose-600)", fontWeight: 600 }}>
+                  ⚠️ {artPasswordError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <button
+                  type="button"
+                  className="pill-btn-secondary"
+                  style={{ flex: 1, justifyContent: "center" }}
+                  onClick={() => {
+                    setTab("appointments");
+                    setArtPasswordInput("");
+                    setArtPasswordError("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="pill-btn-primary"
+                  style={{ flex: 1.3, justifyContent: "center" }}
+                  disabled={!artPasswordInput.trim()}
+                >
+                  Unlock Access
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (() => {
           const totalPassed = artFeatures.reduce((acc, f) => acc + f.passedCount, 0);
           const totalFailed = artFeatures.reduce((acc, f) => acc + f.failedCount, 0);
           const totalRuns = totalPassed + totalFailed;
@@ -4986,6 +5121,22 @@ interface ArtTaskLog {
                       <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
                       <span>Live Telemetry Active</span>
                     </div>
+
+                    <button
+                      type="button"
+                      className="pill-btn-secondary"
+                      onClick={() => {
+                        setArtAnalyticsUnlocked(false);
+                        if (typeof window !== "undefined") sessionStorage.removeItem("art_analytics_unlocked");
+                        setTab("appointments");
+                        setToast("ART Analytics locked.");
+                      }}
+                      title="Lock ART Analytics screen"
+                      style={{ fontSize: "12px", padding: "5px 12px" }}
+                    >
+                      <IconLock size={12} />
+                      <span>Lock Screen</span>
+                    </button>
 
                     <button
                       type="button"
@@ -5317,10 +5468,119 @@ interface ArtTaskLog {
               </div>
             </div>
           );
-        })()}
+        })())}
           </main>
         </div>
       </div>
+
+      {/* ART ANALYTICS SECURITY ACCESS MODAL */}
+      {artPasswordModalOpen && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setArtPasswordModalOpen(false);
+              setArtPasswordInput("");
+              setArtPasswordError("");
+            }
+          }}
+        >
+          <div className="modal-window" style={{ maxWidth: "420px", textAlign: "center", padding: "28px 24px" }}>
+            <button
+              className="modal-close-icon"
+              onClick={() => {
+                setArtPasswordModalOpen(false);
+                setArtPasswordInput("");
+                setArtPasswordError("");
+              }}
+            >
+              ×
+            </button>
+
+            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(13, 148, 136, 0.12)", border: "1px solid rgba(13, 148, 136, 0.25)", display: "grid", placeItems: "center", margin: "0 auto 14px", color: "var(--teal-600)" }}>
+              <IconLock size={24} />
+            </div>
+
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--teal-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Protected Clinical Screen
+            </div>
+            <h2 style={{ margin: "4px 0 6px", fontSize: "19px", fontWeight: 800, color: "var(--ink-900)" }}>
+              ART Analytics Password
+            </h2>
+            <p style={{ margin: "0 0 18px", color: "var(--ink-500)", fontSize: "12.5px", lineHeight: "1.5" }}>
+              Please enter the authorization password to access ART Observability, Multi-Agent telemetry, and connector logs.
+            </p>
+
+            <form onSubmit={handleUnlockArtAnalytics} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ position: "relative", textAlign: "left" }}>
+                <input
+                  type={showArtPassword ? "text" : "password"}
+                  autoFocus
+                  placeholder="Enter password..."
+                  value={artPasswordInput}
+                  onChange={(e) => {
+                    setArtPasswordInput(e.target.value);
+                    if (artPasswordError) setArtPasswordError("");
+                  }}
+                  style={{
+                    paddingRight: "40px",
+                    borderColor: artPasswordError ? "var(--rose-600)" : undefined,
+                    boxShadow: artPasswordError ? "0 0 0 3px rgba(239, 68, 68, 0.15)" : undefined,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowArtPassword(!showArtPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    color: "var(--ink-400)",
+                    padding: "4px",
+                  }}
+                  title={showArtPassword ? "Hide password" : "Show password"}
+                >
+                  {showArtPassword ? "👁️" : "🙈"}
+                </button>
+              </div>
+
+              {artPasswordError && (
+                <div style={{ fontSize: "12px", color: "var(--rose-600)", fontWeight: 600 }}>
+                  ⚠️ {artPasswordError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <button
+                  type="button"
+                  className="pill-btn-secondary"
+                  style={{ flex: 1, justifyContent: "center" }}
+                  onClick={() => {
+                    setArtPasswordModalOpen(false);
+                    setArtPasswordInput("");
+                    setArtPasswordError("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="pill-btn-primary"
+                  style={{ flex: 1.3, justifyContent: "center" }}
+                  disabled={!artPasswordInput.trim()}
+                >
+                  Unlock Screen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* SYSTEM INTEGRATIONS MODAL */}
       {settingsOpen && (
