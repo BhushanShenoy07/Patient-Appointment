@@ -1458,7 +1458,7 @@ export default function Home() {
         qLower === "hello zoe" ||
         qLower === "hey zoe";
 
-      // 2. What Can You Do Check: Output only task names, nothing else
+      // 2. What Can You Do Check: Output only the 4 task names requested
       const isWhatCanYouDo =
         qLower.includes("what can you do") ||
         qLower.includes("what u can do") ||
@@ -1470,7 +1470,17 @@ export default function Home() {
         qLower.includes("features") ||
         qLower === "help";
 
-      if (isGreeting && !isWhatCanYouDo) {
+      // 3. Patient Critical Alerts & Allergies Query Check
+      const isCriticalAlertsQuery =
+        qLower.includes("critical alert") ||
+        qLower.includes("allerg") ||
+        qLower.includes("patient alert") ||
+        qLower.includes("check patient critical") ||
+        qLower.includes("patient critical") ||
+        qLower === "check patient critical alerts & allergies" ||
+        qLower.includes("critical alerts & allergies");
+
+      if (isGreeting && !isWhatCanYouDo && !isCriticalAlertsQuery) {
         setBotMood("happy");
         botResponseText = "Hi! Zoe here ✨";
       }
@@ -1482,17 +1492,72 @@ I can:
 • Generate patient report (PDF)
 • Draft prescription slip (Rx)
 • Check patient critical alerts & allergies
-• Show daily consultation schedule
-• Synchronize clinic records
-• Check clinic diagnosis`;
+• Show daily consultation schedule`;
       }
-      // 3. Live Data Sync Trigger
+      // 4. Check Patient Critical Alerts & Allergies
+      else if (isCriticalAlertsQuery) {
+        setBotMood("medic");
+        let matched = patients.find(p => {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          if (!pName) return false;
+          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
+        });
+
+        if (matched) {
+          const pName = matched.fields[COL.name] || "Patient";
+          const { alerts } = getPatientCriticalAlerts(matched);
+          const blood = matched.fields[COL.bloodGroup] || "Standard profile";
+          const notes = matched.fields[COL.notes] || "No adverse clinical flags documented.";
+
+          let alertSection = "";
+          if (alerts.length > 0) {
+            alertSection = alerts.map(a => `• ${a}`).join("\n");
+          } else {
+            alertSection = "• ✅ Clinical Safety Check: No adverse drug reactions or chronic alerts flagged (NKDA).";
+          }
+
+          botResponseText = `Hi! Zoe here ✨
+
+⚠️ Critical Alerts & Allergies for ${pName} (${blood}):
+${alertSection}
+
+Clinical Notes: ${notes}`;
+        } else {
+          // Summary overview across registered patients
+          const flaggedList: string[] = [];
+          const cleanList: string[] = [];
+
+          patients.forEach(p => {
+            const pName = p.fields[COL.name] || "Patient";
+            const { alerts } = getPatientCriticalAlerts(p);
+            if (alerts.length > 0) {
+              flaggedList.push(`• ⚠️ ${pName}: ${alerts.join(", ")}`);
+            } else {
+              cleanList.push(`• ✅ ${pName}: No known drug allergies (NKDA)`);
+            }
+          });
+
+          let details = "";
+          if (flaggedList.length > 0) {
+            details += `Flagged Alerts (${flaggedList.length}):\n${flaggedList.join("\n")}\n\n`;
+          }
+          if (cleanList.length > 0) {
+            details += `Verified Patient Profiles:\n${cleanList.slice(0, 6).join("\n")}`;
+          }
+
+          botResponseText = `Hi! Zoe here ✨
+
+⚠️ Patient Critical Alerts & Allergies Overview:
+${details || "All registered patient profiles verified. No adverse drug allergies flagged."}`;
+        }
+      }
+      // 5. Live Data Sync Trigger
       else if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
         setBotMood("medic");
         botResponseText = "Hi! Zoe here ✨ All clinic records and appointments have been synchronized live with the database!";
         void handleSyncClinic();
       }
-      // 4. Doctor's Daily Consultation Schedule Brief
+      // 6. Doctor's Daily Consultation Schedule Brief
       else if (
         qLower.includes("schedule") ||
         qLower.includes("today's appointment") ||
@@ -1521,7 +1586,21 @@ I can:
           scheduleDetails = "• No consultations scheduled for today. Clinic roster is clear!";
         } else {
           scheduleDetails = myToday.map((a, i) => {
-            const timeStr = a.fields[COL.time] ? `${Math.floor(Number(a.fields[COL.time]) / 60)}:${String(Number(a.fields[COL.time]) % 60).padStart(2, "0")}` : "Scheduled";
+            const rawTime = a.fields[COL.time];
+            let timeStr = "Flexible Slot";
+            if (rawTime !== undefined && rawTime !== null && String(rawTime).trim() !== "") {
+              const num = Number(rawTime);
+              if (!isNaN(num) && num > 0 && num <= 1440) {
+                timeStr = labelTime(num);
+              } else {
+                const parsed = toMin(String(rawTime));
+                if (parsed !== null && !isNaN(parsed)) {
+                  timeStr = labelTime(parsed);
+                } else if (!String(rawTime).toLowerCase().includes("nan")) {
+                  timeStr = String(rawTime);
+                }
+              }
+            }
             const pName = a.fields[COL.name] || "Patient";
             const mode = modeOf(a.fields);
             const status = a.fields[COL.status] || "Confirmed";
@@ -1538,11 +1617,9 @@ I can:
 • 🌐 Zoom Telehealth Consults: ${onlineVisits.length}
 
 Scheduled Consultations:
-${scheduleDetails}
-
-💡 Tip: Say 'Give me report pdf of [Patient Name]' before each consult to review their full clinical history!`;
+${scheduleDetails}`;
       }
-      // 5. Quick Rx Prescription Slip Drafter
+      // 7. Quick Rx Prescription Slip Drafter (NO auto-download)
       else if (
         qLower.includes("rx") ||
         qLower.includes("prescribe") ||
@@ -1586,13 +1663,13 @@ ${allergyLine}
 • Prescribing Physician: ${user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D."}
 • Status: Downloadable official PDF ready below!`;
 
-          handleDownloadPrescription(pName);
+          // Note: NOT auto-downloading per user request; user clicks the chat button to download.
         } else {
           setBotMood("happy");
           botResponseText = `Hi! Zoe here ✨ Please specify which patient to prescribe for (e.g., 'Rx for [Patient Name]'), and I'll generate their official prescription slip with allergy checks right away!`;
         }
       }
-      // 6. Patient Medical Report Request with Critical Alert Flagging
+      // 8. Patient Medical Report Request with Critical Alert Flagging (NO auto-download)
       else {
         let matched = patients.find(p => {
           const pName = (p.fields[COL.name] || "").toLowerCase().trim();
@@ -1624,7 +1701,7 @@ ${allergyLine}
           }
 
           botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:${alertSection}`;
-          handleDownloadPatientReport(pName);
+          // Note: NOT auto-downloading per user request; user clicks the chat button to download.
         } else if (extractedName) {
           setBotMood("happy");
           botResponseText = `Hi! Zoe here ✨ Could not find any patient named '${extractedName}' in the clinic database. Please verify the name or click 'Sync' to refresh records.`;
