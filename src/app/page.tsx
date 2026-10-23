@@ -1448,13 +1448,51 @@ export default function Home() {
       let pdfDownloadPatientName: string | undefined = undefined;
       let rxDownloadPatientName: string | undefined = undefined;
 
-      // 1. Live Data Sync Trigger
-      if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
+      // 1. Greeting Check: When user says hi / hello, just say hi
+      const isGreeting =
+        /^(hi|hello|hey|greetings|hola|yo|good\s*(morning|afternoon|evening))\b/i.test(query.trim()) ||
+        qLower === "hi" ||
+        qLower === "hello" ||
+        qLower === "hey" ||
+        qLower === "hi zoe" ||
+        qLower === "hello zoe" ||
+        qLower === "hey zoe";
+
+      // 2. What Can You Do Check: Output only task names, nothing else
+      const isWhatCanYouDo =
+        qLower.includes("what can you do") ||
+        qLower.includes("what u can do") ||
+        qLower.includes("what can u do") ||
+        qLower.includes("what do you do") ||
+        qLower.includes("what you can do") ||
+        qLower.includes("what you do") ||
+        qLower.includes("capabilities") ||
+        qLower.includes("features") ||
+        qLower === "help";
+
+      if (isGreeting && !isWhatCanYouDo) {
+        setBotMood("happy");
+        botResponseText = "Hi! Zoe here ✨";
+      }
+      else if (isWhatCanYouDo) {
+        setBotMood("happy");
+        botResponseText = `Hi! Zoe here ✨
+
+I can:
+• Generate patient report (PDF)
+• Draft prescription slip (Rx)
+• Check patient critical alerts & allergies
+• Show daily consultation schedule
+• Synchronize clinic records
+• Check clinic diagnosis`;
+      }
+      // 3. Live Data Sync Trigger
+      else if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
         setBotMood("medic");
         botResponseText = "Hi! Zoe here ✨ All clinic records and appointments have been synchronized live with the database!";
         void handleSyncClinic();
       }
-      // 2. Doctor's Daily Consultation Schedule Brief
+      // 4. Doctor's Daily Consultation Schedule Brief
       else if (
         qLower.includes("schedule") ||
         qLower.includes("today's appointment") ||
@@ -1504,7 +1542,7 @@ ${scheduleDetails}
 
 💡 Tip: Say 'Give me report pdf of [Patient Name]' before each consult to review their full clinical history!`;
       }
-      // 3. Quick Rx Prescription Slip Drafter
+      // 5. Quick Rx Prescription Slip Drafter
       else if (
         qLower.includes("rx") ||
         qLower.includes("prescribe") ||
@@ -1554,7 +1592,7 @@ ${allergyLine}
           botResponseText = `Hi! Zoe here ✨ Please specify which patient to prescribe for (e.g., 'Rx for [Patient Name]'), and I'll generate their official prescription slip with allergy checks right away!`;
         }
       }
-      // 4. Patient Medical Report Request with Critical Alert Flagging
+      // 6. Patient Medical Report Request with Critical Alert Flagging
       else {
         let matched = patients.find(p => {
           const pName = (p.fields[COL.name] || "").toLowerCase().trim();
@@ -1595,22 +1633,9 @@ ${allergyLine}
           const sampleName = patients[0]?.fields[COL.name] || "Patient Name";
           botResponseText = `Hi! Zoe here ✨ Please specify which patient's report you'd like (e.g., 'Give me report pdf of ${sampleName}'), and I will provide their downloadable PDF report right here in chat!`;
         } else {
-          // General conversational response: explain what Zoe can do and cannot do
+          // Default response
           setBotMood("happy");
-          botResponseText = `Hi! Zoe here ✨
-
-Here is what I CAN do:
-• 📄 Download Patient Report: Say "Give me report pdf of [Patient Name]" to generate and download their signed official medical PDF in chat.
-• 💊 Quick Rx Slip Drafter: Say "Rx for [Patient Name]" to generate and download an official prescription slip with verified dosages and doctor signature.
-• ⚠️ Patient Critical Alerts: I automatically flag drug allergies, hypertension, and diabetes warnings whenever you view a patient.
-• 📋 Daily Schedule Brief: Say "today's schedule" for an instant overview of today's In-Person vs. Zoom Telehealth consults.
-• 🔄 Live Data Sync: Click the [🔄 Sync] button near Diagnosis or say "sync records" to refresh all patient & appointment data live from the database.
-• 🩺 Clinic Overview: Click [🩺 Diagnosis] to check total appointments, registered patients, and system status.
-• 💖 Playful Companion: Pet me or make me flip whenever you need a quick stress relief break during your shift!
-
-Here is what I CANNOT do:
-• ❌ Clinical Diagnoses & Prescriptions: I provide draft documents and records; all prescriptions require physician review.
-• ❌ External Medical Records: I cannot access unverified third-party hospital databases or modify records without authorized credentials.`;
+          botResponseText = "Hi! Zoe here ✨";
         }
       }
 
