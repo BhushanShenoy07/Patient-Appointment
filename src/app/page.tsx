@@ -601,7 +601,11 @@ function ChatPanel({
   const threadEnd = useRef<HTMLDivElement>(null);
   const connected = status.startsWith("connected");
   const peer = people.find(p => p.artUsername.toLowerCase() === activePeer.toLowerCase());
-  const thread = messages.filter(m => m.peer.toLowerCase() === activePeer.toLowerCase()).slice().reverse();
+  const thread = messages
+    .filter(m => m.peer.toLowerCase() === activePeer.toLowerCase())
+    .filter(m => !(m.event === "appointment" && (!m.content?.name || m.content.name === "Patient Consultation" || String(m.content?.text || "").includes("Consultation Notice"))))
+    .slice()
+    .reverse();
 
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ block: "end" });
@@ -620,7 +624,9 @@ function ChatPanel({
         .includes(filter.trim().toLowerCase())
     )
     .map(p => {
-      const own = messages.filter(m => m.peer.toLowerCase() === p.artUsername.toLowerCase());
+      const own = messages
+        .filter(m => m.peer.toLowerCase() === p.artUsername.toLowerCase())
+        .filter(m => !(m.event === "appointment" && (!m.content?.name || m.content.name === "Patient Consultation")));
       return {
         person: p,
         last: own[0],
@@ -694,19 +700,7 @@ function ChatPanel({
                 <Avatar person={person} online={isPeerOnline} />
                 <div className="chat-contact-info">
                   <div className="chat-contact-top-row">
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span className="chat-contact-name">{person.name}</span>
-                      {isPeerOnline ? (
-                        <span style={{ fontSize: "10px", color: "var(--emerald-600)", fontWeight: 700, backgroundColor: "var(--emerald-50)", border: "1px solid var(--emerald-line)", padding: "1px 6px", borderRadius: "10px", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                          <span style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "var(--emerald-500)" }} />
-                          Online
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: "10px", color: "var(--ink-400)", backgroundColor: "var(--surface-subtle)", padding: "1px 5px", borderRadius: "10px" }}>
-                          Offline
-                        </span>
-                      )}
-                    </div>
+                    <span className="chat-contact-name">{person.name}</span>
                     {last && <span className="chat-contact-time">{timeLabel(last.at)}</span>}
                   </div>
                   <div className="chat-contact-bottom-row">
@@ -744,14 +738,17 @@ function ChatPanel({
                     <span>·</span>
                     <span>@{peer.artUsername}</span>
                     <span>·</span>
-                    {online.has(peer.artUsername.toLowerCase()) ? (
-                      <span className="chat-peer-online-tag" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "var(--emerald-500)" }} />
-                        Online now
-                      </span>
-                    ) : (
-                      <span style={{ color: "var(--ink-400)" }}>Offline</span>
-                    )}
+                    <span
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        backgroundColor: online.has(peer.artUsername.toLowerCase()) ? "#10b981" : "#ef4444",
+                        display: "inline-block",
+                        boxShadow: online.has(peer.artUsername.toLowerCase()) ? "0 0 0 2px rgba(16, 185, 129, 0.25)" : "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                      }}
+                      title={online.has(peer.artUsername.toLowerCase()) ? "Online" : "Offline"}
+                    />
                   </div>
                 </div>
               </div>
@@ -2225,6 +2222,13 @@ interface ArtTaskLog {
   useEffect(() => {
     if (!user) return;
     const off = onArtEvent(({ event, content }) => {
+      // Do not process dummy/generic "Patient Consultation" alert notices
+      if (
+        event === "appointment" &&
+        (!content?.name || content.name === "Patient Consultation" || String(content?.text || "").includes("Consultation Notice"))
+      ) {
+        return;
+      }
       addMessage({
         id: typeof content?.id === "string" ? content.id : crypto.randomUUID(),
         direction: "in",

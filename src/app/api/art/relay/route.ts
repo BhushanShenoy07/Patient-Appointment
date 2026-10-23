@@ -17,6 +17,9 @@ declare global {
   var __clinicMessageQueue: RelayMessage[] | undefined;
 }
 
+globalThis.__clinicMessageQueue = (globalThis.__clinicMessageQueue ?? []).filter(
+  m => m.event !== "appointment" && m.event !== "clinic_appointment"
+);
 const messageQueue: RelayMessage[] = (globalThis.__clinicMessageQueue ??= []);
 
 export async function POST(request: Request) {
@@ -36,7 +39,8 @@ export async function POST(request: Request) {
       }
     }
 
-    if (event !== "clinic_presence" || body.type === "announce") {
+    // Do NOT store appointment alert notices in persistent broadcast relay
+    if (event !== "clinic_presence" && event !== "appointment" && event !== "clinic_appointment") {
       const msg: RelayMessage = {
         id,
         event,
@@ -67,9 +71,10 @@ export async function GET(request: Request) {
     recordHeartbeat(username);
   }
 
-  // Filter messages for this user (targeted to them or broadcast)
+  // Filter messages for this user; never replay appointment alerts on connection
   const messages = messageQueue.filter(m => {
     if (m.timestamp <= since) return false;
+    if (m.event === "appointment" || m.event === "clinic_appointment") return false;
     if (!m.to) return true; // broadcast
     return m.to === username || m.from === username;
   });

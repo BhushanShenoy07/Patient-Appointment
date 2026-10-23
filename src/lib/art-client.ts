@@ -124,9 +124,9 @@ async function open(preferredUsername?: string): Promise<ArtConnection> {
   // Self is online
   markReachable(config.username, true);
 
-  // Start real-time relay synchronizer
+  // Start real-time relay synchronizer (only listen for current real-time messages)
   clearInterval(relayTimer);
-  lastSyncTimestamp = 0;
+  lastSyncTimestamp = Date.now() - 3000;
   void syncRelay(config.username);
   relayTimer = setInterval(() => void syncRelay(config.username), 2000);
 
