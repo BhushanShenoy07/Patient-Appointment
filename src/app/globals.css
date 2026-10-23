@@ -1123,6 +1123,65 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
 }
 
+/* DOCTOR CARD ACTION BUTTONS */
+.doctor-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.doctor-btn-primary {
+  flex: 1;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+.doctor-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+  filter: brightness(1.08);
+}
+.doctor-btn-primary:active {
+  transform: translateY(0);
+}
+
+.doctor-btn-secondary {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.doctor-btn-secondary:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+.doctor-btn-secondary:active {
+  transform: translateY(0);
+}
+
 /* CALENDAR ASIDE */
 .calendar-nav-toolbar {
   display: flex;
@@ -2425,19 +2484,34 @@ input:focus, select:focus, textarea:focus {
 [data-theme="dark"] .auth-panel-card,
 [data-theme="dark"] .settings-modal-dialog,
 [data-theme="dark"] .calendar-date-cell,
-[data-theme="dark"] .patient-directory-card {
+[data-theme="dark"] .patient-directory-card,
+[data-theme="dark"] .doctor-profile-card {
   background-color: #111827;
   border-color: #1e293b;
 }
 
-[data-theme="dark"] .pill-btn-secondary {
+[data-theme="dark"] .doctor-stats-bar {
+  background-color: #162032;
+  border-color: #1e293b;
+}
+[data-theme="dark"] .doctor-stats-bar strong {
+  color: #f1f5f9;
+}
+[data-theme="dark"] .doctor-stats-bar span {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .pill-btn-secondary,
+[data-theme="dark"] .doctor-btn-secondary {
   background-color: #1e293b;
   border-color: #334155;
   color: #f1f5f9;
 }
 
-[data-theme="dark"] .pill-btn-secondary:hover {
+[data-theme="dark"] .pill-btn-secondary:hover,
+[data-theme="dark"] .doctor-btn-secondary:hover {
   background-color: #334155;
+  color: #ffffff;
 }
 
 [data-theme="dark"] .action-sub-btn {

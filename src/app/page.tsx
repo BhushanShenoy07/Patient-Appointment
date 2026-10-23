@@ -3321,16 +3321,6 @@ interface ArtTaskLog {
               </button>
             )}
           </nav>
-
-          {/* CLINICAL OPERATIONS STATUS CARD */}
-          <div className="sidebar-promo-widget">
-            <div className="promo-badge-tag">
-              <span className="promo-status-dot" />
-              <span>Airtable Live</span>
-            </div>
-            <div className="promo-title">Clinical Desk Pro</div>
-            <div className="promo-subtitle">Live Agent & Multi-Platform Sync</div>
-          </div>
         </aside>
 
         {/* MAIN DASHBOARD CONTENT AREA */}
@@ -4374,15 +4364,23 @@ interface ArtTaskLog {
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                             <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--ink-900)" }}>{doc.name}</div>
-                            {onlineUsers.has(String(doc.artUsername || doc.email.split("@")[0]).toLowerCase()) ? (
-                              <span className="clinical-badge completed" style={{ fontSize: "10.5px", padding: "1px 6px" }}>
-                                ● Online now
-                              </span>
-                            ) : (
-                              <span className="clinical-badge pending" style={{ fontSize: "10.5px", padding: "1px 6px", color: "var(--ink-500)" }}>
-                                Offline
-                              </span>
-                            )}
+                            {(() => {
+                              const isDocOnline = onlineUsers.has(String(doc.artUsername || doc.email.split("@")[0]).toLowerCase());
+                              return (
+                                <span
+                                  style={{
+                                    width: "8px",
+                                    height: "8px",
+                                    borderRadius: "50%",
+                                    backgroundColor: isDocOnline ? "#10b981" : "#ef4444",
+                                    display: "inline-block",
+                                    boxShadow: isDocOnline ? "0 0 0 2px rgba(16, 185, 129, 0.25)" : "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                                  }}
+                                  title={isDocOnline ? "Online" : "Offline"}
+                                  aria-label={isDocOnline ? "Online" : "Offline"}
+                                />
+                              );
+                            })()}
                           </div>
                           <span className="specialty-tag">{doc.specialization}</span>
                         </div>
@@ -4409,10 +4407,10 @@ interface ArtTaskLog {
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+                    <div className="doctor-card-actions">
                       <button
-                        className="btn-primary"
-                        style={{ flex: 1, padding: "6px 8px", fontSize: "11.5px" }}
+                        type="button"
+                        className="doctor-btn-primary"
                         onClick={() => {
                           setTab("appointments");
                           setDoctorFilter(doc.name);
@@ -4422,8 +4420,8 @@ interface ArtTaskLog {
                         Schedule Consultation
                       </button>
                       <button
-                        className="btn-secondary"
-                        style={{ padding: "6px 8px", fontSize: "11.5px" }}
+                        type="button"
+                        className="doctor-btn-secondary"
                         onClick={() => {
                           setTab("appointments");
                           setDoctorFilter(doc.name);
