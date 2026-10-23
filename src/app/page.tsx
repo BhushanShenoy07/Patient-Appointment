@@ -3458,32 +3458,6 @@ interface ArtTaskLog {
                 </button>
               )}
 
-              {!isDoctorRole && (
-                <button
-                  type="button"
-                  className="pill-btn-secondary"
-                  onClick={() => setArtConsoleOpen(true)}
-                  title="Open ART Multi-Agent Live Execution Console"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    borderColor: artAgentActive ? "var(--teal-500)" : undefined,
-                    backgroundColor: artAgentActive ? "var(--teal-50)" : undefined,
-                    color: artAgentActive ? "var(--teal-700)" : undefined,
-                    fontWeight: 600,
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>🤖</span>
-                  <span>Multi-Agent</span>
-                  {artAgentActive ? (
-                    <span className="pulse-dot" style={{ backgroundColor: "var(--teal-500)" }} />
-                  ) : (
-                    <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "9999px", background: "var(--line-200)", color: "var(--ink-500)" }}>Live</span>
-                  )}
-                </button>
-              )}
-
               <button type="button" className="pill-btn-secondary" onClick={exportCSV}>
                 <IconDownload size={13} />
                 <span>Export CSV</span>
