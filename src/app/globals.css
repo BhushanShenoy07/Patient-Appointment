@@ -480,6 +480,7 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  padding-right: 125px; /* Dedicated clearance for fixed top-right signout button */
 }
 
 .pill-btn-primary {
@@ -2818,43 +2819,967 @@ input:focus, select:focus, textarea:focus {
   border-color: #1e293b;
 }
 
-/* FLOATING BLUE ROBOT TRIGGER (NO TEXT, PEEKS FROM BOTTOM, HOVERS UP ON HOVER/CLICK) */
-.blue-robot-trigger {
+/* ==========================================================================
+   FIXED TOP-RIGHT SIGN OUT BUTTON
+   ========================================================================== */
+.fixed-top-signout-btn {
+  position: fixed;
+  top: 18px;
+  right: 28px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  color: #e11d48;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.14), 0 1px 3px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  outline: none;
+}
+
+.fixed-top-signout-btn:hover {
+  background: #e11d48;
+  color: #ffffff;
+  border-color: #be123c;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 8px 24px rgba(225, 29, 72, 0.35);
+}
+
+.fixed-top-signout-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ==========================================================================
+   CUTE PEEPING & PLAYABLE MASCOT BOT (MEDIBOT)
+   ========================================================================== */
+.peeping-bot-container {
   position: fixed;
   bottom: 0;
   right: 28px;
-  z-index: 990;
+  z-index: 995;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Cute Floating Speech / Greeting Bubble */
+.peeping-bot-bubble {
+  pointer-events: auto;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1.5px solid #38bdf8;
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25), 0 2px 6px rgba(15, 23, 42, 0.06);
+  margin-bottom: 6px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  animation: botBubbleFloat 3s ease-in-out infinite;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.peeping-bot-bubble:hover {
+  transform: scale(1.06);
+  border-color: #0284c7;
+  box-shadow: 0 10px 24px rgba(2, 132, 199, 0.35);
+}
+
+.peeping-bot-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  right: 28px;
+  width: 10px;
+  height: 6px;
+  background: #ffffff;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 1px 0 #38bdf8);
+}
+
+@keyframes botBubbleFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* The Peeping Bot Trigger Button */
+.peeping-bot-trigger {
+  pointer-events: auto;
   background: transparent;
   border: none;
   padding: 0;
   margin: 0;
   cursor: pointer;
+  outline: none;
   display: flex;
   align-items: flex-end;
-  transform: translateY(10px);
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.35s ease;
-  outline: none;
+  /* Peeping stance: submerged slightly below bottom edge, paws resting on the border! */
+  transform: translateY(14px);
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.35s ease;
+  filter: drop-shadow(0 8px 20px rgba(0, 242, 254, 0.45)) drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));
+  animation: medibotPeepSway 3.6s ease-in-out infinite;
 }
 
-.blue-robot-trigger:hover,
-.blue-robot-trigger:focus-visible {
-  transform: translateY(-16px);
-  filter: drop-shadow(0 12px 24px rgba(37, 99, 235, 0.6));
-  animation: robotHoverBob 2.2s ease-in-out infinite alternate;
+.peeping-bot-trigger:hover,
+.peeping-bot-trigger:focus-visible {
+  /* Hops up animatically from the bottom edge on hover! */
+  transform: translateY(-22px) scale(1.08);
+  filter: drop-shadow(0 14px 32px rgba(0, 242, 254, 0.7)) drop-shadow(0 6px 16px rgba(99, 102, 241, 0.55));
+  animation: medibotHoverBob 2.2s ease-in-out infinite alternate;
 }
 
-.blue-robot-trigger:active {
-  transform: translateY(-24px) scale(1.08);
+.peeping-bot-trigger:active {
+  transform: translateY(-28px) scale(1.14);
 }
 
-@keyframes robotHoverBob {
+.peeping-bot-trigger.flipping {
+  animation: medibotFlip 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Mascot Keyframes */
+@keyframes medibotPeepSway {
+  0%, 100% {
+    transform: translateY(14px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(11px) rotate(-2deg);
+  }
+  75% {
+    transform: translateY(11px) rotate(2deg);
+  }
+}
+
+@keyframes medibotHoverBob {
   0% {
-    transform: translateY(-16px);
+    transform: translateY(-22px) scale(1.08) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-28px) scale(1.1) rotate(1.5deg);
   }
   100% {
-    transform: translateY(-24px);
+    transform: translateY(-22px) scale(1.08) rotate(-1.5deg);
   }
 }
+
+@keyframes medibotFlip {
+  0% {
+    transform: translateY(-20px) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translateY(-55px) rotate(180deg) scale(1.2);
+  }
+  100% {
+    transform: translateY(-22px) rotate(360deg) scale(1.08);
+  }
+}
+
+/* Eye Blinking */
+.medibot-eyes-group {
+  transform-origin: 32px 25px;
+  animation: medibotEyeBlink 4.5s ease-in-out infinite;
+}
+
+@keyframes medibotEyeBlink {
+  0%, 92%, 100% {
+    transform: scaleY(1);
+  }
+  94%, 96% {
+    transform: scaleY(0.08);
+  }
+}
+
+/* Left and Right Paws subtle grip rhythm */
+.medibot-left-paw {
+  transform-origin: 17px 48px;
+  animation: medibotPawSqueeze 2.8s ease-in-out infinite;
+}
+.medibot-right-paw {
+  transform-origin: 47px 48px;
+  animation: medibotPawSqueeze 2.8s ease-in-out infinite 0.4s;
+}
+
+@keyframes medibotPawSqueeze {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+/* ==========================================================================
+   PLAYABLE BOT COMPANION HUB DRAWER / CARD
+   ========================================================================== */
+.cute-bot-hub-wrapper {
+  position: fixed;
+  bottom: 96px;
+  right: 28px;
+  z-index: 998;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  height: 620px;
+  max-height: calc(100vh - 120px);
+  animation: botHubPopUp 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes botHubPopUp {
+  0% {
+    opacity: 0;
+    transform: translateY(40px) scale(0.9);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cute-bot-hub-card {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 24px;
+  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.22), 0 8px 24px rgba(14, 165, 233, 0.18);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.cute-bot-hub-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid rgba(186, 230, 253, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cute-bot-header-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #00f2fe, #0284c7);
+  display: grid;
+  place-items: center;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.cute-bot-pulse-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+}
+
+.cute-bot-hub-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.cute-bot-hub-subtitle {
+  font-size: 11px;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.cute-bot-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: #ffffff;
+  color: #475569;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cute-bot-icon-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  transform: scale(1.05);
+}
+
+.cute-bot-icon-btn.close {
+  font-size: 18px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.cute-bot-icon-btn.close:hover {
+  background: #fee2e2;
+  color: #e11d48;
+  border-color: #fca5a5;
+}
+
+/* Mascot Stage */
+.cute-bot-stage {
+  padding: 12px 18px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  background: radial-gradient(circle at 50% 30%, rgba(224, 242, 254, 0.45) 0%, transparent 70%);
+  flex-shrink: 0;
+}
+
+.cute-bot-stage-speech {
+  background: #ffffff;
+  border: 1.5px solid #bae6fd;
+  border-radius: 16px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+  text-align: center;
+  max-width: 90%;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+  margin-bottom: 14px;
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+.cute-bot-stage-speech::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 6px;
+  background: #ffffff;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 1px 0 #bae6fd);
+}
+
+.cute-bot-big-avatar {
+  cursor: pointer;
+  padding: 8px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 10px 24px rgba(0, 242, 254, 0.35)) drop-shadow(0 4px 12px rgba(99, 102, 241, 0.25));
+}
+
+.cute-bot-big-avatar:hover {
+  transform: scale(1.06) translateY(-4px);
+  filter: drop-shadow(0 16px 32px rgba(0, 242, 254, 0.55)) drop-shadow(0 6px 18px rgba(99, 102, 241, 0.4));
+}
+
+.cute-bot-big-avatar.flipping {
+  animation: medibotStageFlip 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes medibotStageFlip {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.2) translateY(-20px); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.cute-bot-big-avatar.blushing {
+  animation: medibotBlushWiggle 0.6s ease-in-out;
+}
+
+@keyframes medibotBlushWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg) scale(1.04); }
+  75% { transform: rotate(5deg) scale(1.04); }
+}
+
+/* Floating Heart Particles */
+.cute-bot-floating-heart {
+  position: absolute;
+  font-size: 18px;
+  pointer-events: none;
+  animation: floatHeart 1.4s ease-out forwards;
+}
+
+@keyframes floatHeart {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.6);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-24px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scale(1.3);
+  }
+}
+
+/* Play Buttons Row */
+.cute-bot-play-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.cute-bot-play-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.cute-bot-play-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.cute-bot-play-btn.pet:hover {
+  border-color: #f472b6;
+  background: #fdf2f8;
+  color: #db2777;
+}
+
+.cute-bot-play-btn.flip:hover {
+  border-color: #818cf8;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.cute-bot-play-btn.check:hover {
+  border-color: #38bdf8;
+  background: #f0f9ff;
+  color: #0284c7;
+}
+
+/* ==========================================================================
+   INTERACTIVE PLAYABLE AI CHAT SECTION
+   ========================================================================== */
+.cute-bot-chat-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fafbfd;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cute-bot-chat-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+}
+
+.cute-bot-msg {
+  display: flex;
+  gap: 8px;
+  max-width: 88%;
+  animation: botMsgFade 0.25s ease forwards;
+}
+
+@keyframes botMsgFade {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cute-bot-msg.bot {
+  align-self: flex-start;
+}
+
+.cute-bot-msg.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.cute-bot-msg-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00f2fe, #0284c7);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+}
+
+.cute-bot-msg-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cute-bot-msg.user .cute-bot-msg-content {
+  align-items: flex-end;
+}
+
+.cute-bot-msg-bubble {
+  padding: 9px 13px;
+  border-radius: 16px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.cute-bot-msg.bot .cute-bot-msg-bubble {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-top-left-radius: 4px;
+}
+
+.cute-bot-msg.user .cute-bot-msg-bubble {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  border-top-right-radius: 4px;
+}
+
+.cute-bot-msg-time {
+  font-size: 10px;
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+/* Trivia Options */
+.cute-bot-trivia-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.trivia-opt-btn {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid #0284c7;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trivia-opt-btn:hover:not(:disabled) {
+  background: #0284c7;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.trivia-opt-btn.correct {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.trivia-opt-btn.wrong {
+  border-color: #f43f5e;
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+/* Typing Dots */
+.cute-bot-msg-bubble.typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0284c7;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* Suggestion Chips Bar */
+.cute-bot-chips-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 12px 8px;
+  background: #fafbfd;
+  scrollbar-width: none;
+}
+
+.cute-bot-chips-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.cute-bot-chip {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cute-bot-chip:hover {
+  border-color: #0284c7;
+  color: #0284c7;
+  background: #f0f9ff;
+  transform: translateY(-1px);
+}
+
+/* Input Form */
+.cute-bot-chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cute-bot-chat-input {
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: 20px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 12.5px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.cute-bot-chat-input:focus {
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.cute-bot-chat-send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+
+.cute-bot-chat-send-btn:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.45);
+}
+
+.cute-bot-chat-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Patient Summary Card in Zoe Chat */
+.cute-bot-patient-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cute-bot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cute-bot-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cute-bot-blood-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.cute-bot-card-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.cute-bot-card-notes {
+  font-size: 11px;
+  color: #64748b;
+  background: #ffffff;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e1;
+  margin-top: 2px;
+}
+
+/* Downloadable PDF Button */
+.cute-bot-pdf-btn {
+  margin-top: 8px;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cute-bot-pdf-btn:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
+}
+
+.cute-bot-pdf-btn:active {
+  transform: translateY(0);
+}
+
+/* Quick Patient Select Pills */
+.cute-bot-patient-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.cute-bot-patient-pill {
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cute-bot-patient-pill:hover {
+  background: #0284c7;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Direct Action Buttons */
+.cute-bot-action-btn {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0284c7;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cute-bot-action-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   DARK THEME COMPATIBILITY FOR BOT DRAWER & CHAT
+   ========================================================================== */
+[data-theme="dark"] .cute-bot-hub-card {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: #334155;
+  box-shadow: 0 20px 48px -10px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(14, 165, 233, 0.25);
+}
+
+[data-theme="dark"] .cute-bot-hub-header {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border-color: #334155;
+}
+
+[data-theme="dark"] .cute-bot-hub-title {
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .cute-bot-hub-subtitle {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cute-bot-icon-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .cute-bot-icon-btn:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .cute-bot-stage {
+  background: radial-gradient(circle at 50% 30%, rgba(14, 165, 233, 0.2) 0%, transparent 70%);
+}
+
+[data-theme="dark"] .cute-bot-stage-speech {
+  background: #1e293b;
+  color: #f1f5f9;
+  border-color: #38bdf8;
+}
+
+[data-theme="dark"] .cute-bot-stage-speech::after {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .cute-bot-play-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .cute-bot-chat-section {
+  background: #0b1120;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .cute-bot-msg.bot .cute-bot-msg-bubble {
+  background: #1e293b;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .cute-bot-chips-bar {
+  background: #0b1120;
+}
+
+[data-theme="dark"] .cute-bot-chip {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .cute-bot-chip:hover {
+  background: #334155;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+[data-theme="dark"] .cute-bot-chat-input-row {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .cute-bot-chat-input {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .cute-bot-chat-input:focus {
+  background: #0f172a;
+  border-color: #38bdf8;
+}
+
 
 
 

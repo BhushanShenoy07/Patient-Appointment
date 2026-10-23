@@ -12,6 +12,7 @@ import {
   sendToUser,
   watchUsers,
 } from "@/lib/art-client";
+import { downloadPatientPdf } from "@/lib/patient-pdf";
 
 type Fields = Record<string, string>;
 type RecordItem = { id: string; fields: Fields };
@@ -131,6 +132,212 @@ function IconCross({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
+
+function IconLogOut({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function MediBotSvg({
+  size = 64,
+  isFlipping = false,
+  isBlushing = false,
+  mood = "happy",
+}: {
+  size?: number;
+  isFlipping?: boolean;
+  isBlushing?: boolean;
+  mood?: "happy" | "pet" | "flip" | "medic";
+}) {
+  return (
+    <svg
+      width={size}
+      height={Math.round((size * 58) / 64)}
+      viewBox="0 0 64 58"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="cute-medibot-svg"
+    >
+      <defs>
+        {/* High-contrast gradient: Neon Cyan -> Vivid Sky -> Royal Indigo (pops on BOTH dark and light bg) */}
+        <linearGradient id="medibotBodyGrad" x1="0" y1="6" x2="64" y2="58" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#00f2fe" />
+          <stop offset="45%" stopColor="#0ea5e9" />
+          <stop offset="100%" stopColor="#4f46e5" />
+        </linearGradient>
+
+        {/* Luminous Frost Pearl Faceplate (POPS ON BOTH DARK AND LIGHT BG) */}
+        <linearGradient id="medibotVisorGrad" x1="8" y1="12" x2="56" y2="48" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="50%" stopColor="#f0f9ff" />
+          <stop offset="100%" stopColor="#dbeafe" />
+        </linearGradient>
+
+        <linearGradient id="medibotEyeGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0f172a" />
+          <stop offset="100%" stopColor="#1e293b" />
+        </linearGradient>
+
+        <linearGradient id="medibotEarGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#6366f1" />
+        </linearGradient>
+
+        <linearGradient id="medibotPawGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#bae6fd" />
+        </linearGradient>
+
+        <filter id="medibotBlushGlow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      {/* --- ANTENNA WITH GLOWING HEART/ORB --- */}
+      <rect x="30" y="3" width="4" height="8" rx="2" fill="#38bdf8" />
+      <circle cx="32" cy="3.5" r="3.8" fill="#00f2fe" />
+      <circle cx="32" cy="3.5" r="1.6" fill="#ffffff" />
+
+      {/* --- CUTE ROBOT EARS / SENSORS --- */}
+      <rect x="1" y="16" width="6" height="14" rx="3" fill="url(#medibotEarGrad)" stroke="#ffffff" strokeWidth="1" />
+      <circle cx="4" cy="23" r="1.5" fill="#00f2fe" />
+      <rect x="57" y="16" width="6" height="14" rx="3" fill="url(#medibotEarGrad)" stroke="#ffffff" strokeWidth="1" />
+      <circle cx="60" cy="23" r="1.5" fill="#00f2fe" />
+
+      {/* --- MAIN CHIBI HEAD BODY --- */}
+      <rect
+        x="5"
+        y="8"
+        width="54"
+        height="44"
+        rx="18"
+        fill="url(#medibotBodyGrad)"
+        stroke="rgba(255, 255, 255, 0.9)"
+        strokeWidth="1.8"
+      />
+
+      {/* Inner Visor / Screen Face - LUMINOUS FROST PEARL (POPS ON ANY BG) */}
+      <rect
+        x="9"
+        y="12"
+        width="46"
+        height="36"
+        rx="14"
+        fill="url(#medibotVisorGrad)"
+        stroke="#38bdf8"
+        strokeWidth="1.6"
+      />
+
+      {/* Glossy curved glass glare */}
+      <path
+        d="M13 15 Q32 18 51 15 C52 15 52.5 16 52 17.2 Q32 20.5 12 17.2 C11.5 16 12 15 13 15 Z"
+        fill="#ffffff"
+        opacity="0.85"
+      />
+
+      {/* Forehead Medical Cross Emblem (+) */}
+      <g opacity="0.95">
+        <rect x="30.5" y="14" width="3" height="7" rx="1.5" fill="#10b981" />
+        <rect x="28.5" y="16" width="7" height="3" rx="1.5" fill="#10b981" />
+        <circle cx="32" cy="17.5" r="1" fill="#ffffff" />
+      </g>
+
+      {/* --- CHEEKS (ROSY BLUSH) --- */}
+      <ellipse
+        cx="15"
+        cy="33"
+        rx={isBlushing ? 5.5 : 4.2}
+        ry={isBlushing ? 3.8 : 2.5}
+        fill="#ff3b81"
+        fillOpacity={isBlushing ? 0.95 : 0.8}
+        filter={isBlushing ? "url(#medibotBlushGlow)" : undefined}
+      />
+      <ellipse
+        cx="49"
+        cy="33"
+        rx={isBlushing ? 5.5 : 4.2}
+        ry={isBlushing ? 3.8 : 2.5}
+        fill="#ff3b81"
+        fillOpacity={isBlushing ? 0.95 : 0.8}
+        filter={isBlushing ? "url(#medibotBlushGlow)" : undefined}
+      />
+
+      {/* --- EYES --- */}
+      {mood === "pet" ? (
+        <>
+          <path d="M16 26 Q21 19 26 26" stroke="#0284c7" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+          <path d="M38 26 Q43 19 48 26" stroke="#0284c7" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        </>
+      ) : (
+        <g className="medibot-eyes-group">
+          {/* Left Eye */}
+          <ellipse cx="21" cy="25" rx="5.5" ry="6.2" fill="url(#medibotEyeGrad)" stroke="#0284c7" strokeWidth="0.8" />
+          <ellipse cx="21" cy="26" rx="4.2" ry="4" fill="#0284c7" fillOpacity="0.35" />
+          <circle cx="19.2" cy="22.8" r="2.2" fill="#ffffff" />
+          <circle cx="23.2" cy="27.5" r="1.1" fill="#38bdf8" />
+          <path d="M21 22.5 L21.5 24 L23 24.5 L21.5 25 L21 26.5 L20.5 25 L19 24.5 L20.5 24 Z" fill="#ffffff" />
+
+          {/* Right Eye */}
+          <ellipse cx="43" cy="25" rx="5.5" ry="6.2" fill="url(#medibotEyeGrad)" stroke="#0284c7" strokeWidth="0.8" />
+          <ellipse cx="43" cy="26" rx="4.2" ry="4" fill="#0284c7" fillOpacity="0.35" />
+          <circle cx="41.2" cy="22.8" r="2.2" fill="#ffffff" />
+          <circle cx="45.2" cy="27.5" r="1.1" fill="#38bdf8" />
+          <path d="M43 22.5 L43.5 24 L45 24.5 L43.5 25 L43 26.5 L42.5 25 L41 24.5 L42.5 24 Z" fill="#ffffff" />
+        </g>
+      )}
+
+      {/* --- CUTE SMILE / MOUTH --- */}
+      {mood === "pet" || isBlushing ? (
+        <path
+          d="M27 32.5 Q32 38 37 32.5"
+          stroke="#0f172a"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          fill="#ff4d8d"
+        />
+      ) : (
+        <path
+          d="M27 33.5 Q32 37.5 37 33.5"
+          stroke="#0f172a"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          fill="none"
+        />
+      )}
+
+      {/* --- CUTE PEEPING PAWS (Gripping the bottom edge) --- */}
+      <g className="medibot-left-paw">
+        <path
+          d="M12 48 C12 44, 22 44, 22 48 C22 52, 12 52, 12 48 Z"
+          fill="url(#medibotPawGrad)"
+          stroke="#0284c7"
+          strokeWidth="1.2"
+        />
+        <circle cx="15" cy="48" r="1.2" fill="#f472b6" />
+        <circle cx="17" cy="47.2" r="1.2" fill="#f472b6" />
+        <circle cx="19" cy="48" r="1.2" fill="#f472b6" />
+      </g>
+      <g className="medibot-right-paw">
+        <path
+          d="M42 48 C42 44, 52 44, 52 48 C52 52, 42 52, 42 48 Z"
+          fill="url(#medibotPawGrad)"
+          stroke="#0284c7"
+          strokeWidth="1.2"
+        />
+        <circle cx="45" cy="48" r="1.2" fill="#f472b6" />
+        <circle cx="47" cy="47.2" r="1.2" fill="#f472b6" />
+        <circle cx="49" cy="48" r="1.2" fill="#f472b6" />
+      </g>
+    </svg>
+  );
+}
+
 
 function IconSun({ size = 14 }: { size?: number }) {
   return (
@@ -901,6 +1108,292 @@ export default function Home() {
   const [customMultiPrompt, setCustomMultiPrompt] = useState("");
   const [copiedAgentId, setCopiedAgentId] = useState(false);
 
+  // Cute Playable Mascot Bot State & AI Chat Engine (ZOE)
+  const [botHubOpen, setBotHubOpen] = useState(false);
+  const [botMood, setBotMood] = useState<"happy" | "pet" | "flip" | "medic">("happy");
+  const [botSpeech, setBotSpeech] = useState("Hi! Zoe here ✨ Peeping in to help with your clinic desk!");
+  const [botCheekGlow, setBotCheekGlow] = useState(false);
+  const [botIsFlipping, setBotIsFlipping] = useState(false);
+  const [botSound, setBotSound] = useState(true);
+  const [botHearts, setBotHearts] = useState<Array<{ id: number; x: number; y: number }>>([]);
+
+  type BotChatMessage = {
+    id: string;
+    sender: "bot" | "user";
+    text: string;
+    time: string;
+    actionType?: "diagnosis" | "general" | "appointment" | "patient" | "pdf";
+    patientData?: {
+      name: string;
+      email?: string;
+      phone?: string;
+      bloodGroup?: string;
+      notes?: string;
+      age?: string;
+      gender?: string;
+      totalAppointments: number;
+    };
+    pdfDownloadPatientName?: string;
+    patientSuggestions?: string[];
+  };
+
+  const [botChatMessages, setBotChatMessages] = useState<BotChatMessage[]>([
+    {
+      id: "intro-1",
+      sender: "bot",
+      text: "Hi! Zoe here ✨ I'm your AI Clinic Assistant. I can book appointments, register patients, download detailed patient PDF reports, or run clinic diagnosis!",
+      time: "Just now",
+    },
+  ]);
+  const [botInputText, setBotInputText] = useState("");
+  const [botIsTyping, setBotIsTyping] = useState(false);
+  const botChatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (botHubOpen) {
+      botChatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [botChatMessages, botHubOpen, botIsTyping]);
+
+  // Synchronize role-based greeting for Doctor vs Receptionist
+  useEffect(() => {
+    if (!user) return;
+    const isDoc = user.role === "doctor";
+    const greetingText = isDoc
+      ? "Hi Doc! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat."
+      : "Hi Ma'am! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+    setBotSpeech(isDoc ? "Hi Doc! Zoe here ✨" : "Hi Ma'am! Zoe here ✨");
+    setBotChatMessages([
+      {
+        id: "intro-zoe",
+        sender: "bot",
+        text: greetingText,
+        time: "Just now",
+      },
+    ]);
+  }, [user]);
+
+  function triggerBotAudio(type: "chirp" | "flip" | "purr") {
+    if (!botSound || typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      if (type === "chirp") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.21);
+      } else if (type === "flip") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(554.37, now + 0.08);
+        osc.frequency.setValueAtTime(659.25, now + 0.16);
+        osc.frequency.setValueAtTime(880, now + 0.24);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+        osc.start(now);
+        osc.stop(now + 0.38);
+      } else {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.22);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.32);
+      }
+    } catch {}
+  }
+
+  function handlePetBot() {
+    setBotMood("pet");
+    setBotCheekGlow(true);
+    triggerBotAudio("purr");
+    const isDoc = user?.role === "doctor";
+    const quotes = [
+      "Hehe! That tickles! (≧◡≦) ♡",
+      isDoc ? "Yay! You're an amazing doctor! ✨" : "Yay! You're doing an amazing job! ✨",
+      "Purrrr... Zoe loves helping at the clinic desk! 💖",
+      "Systems running at 100% happy capacity! 🌸",
+      "Saving lives and managing care seamlessly! 🩺"
+    ];
+    setBotSpeech(quotes[Math.floor(Math.random() * quotes.length)]);
+    const newHearts = Array.from({ length: 4 }).map((_, i) => ({
+      id: Date.now() + i + Math.random(),
+      x: 25 + Math.random() * 50,
+      y: 10 + Math.random() * 25,
+    }));
+    setBotHearts(h => [...h, ...newHearts]);
+    setTimeout(() => {
+      setBotHearts(h => h.filter(item => !newHearts.some(nh => nh.id === item.id)));
+      setBotCheekGlow(false);
+      setBotMood("happy");
+    }, 1800);
+  }
+
+  function handleFlipBot() {
+    if (botIsFlipping) return;
+    setBotIsFlipping(true);
+    setBotMood("flip");
+    triggerBotAudio("flip");
+    setBotSpeech("Whoooosh! Zoe did a 360° backflip! (★ω★) 🚀");
+    setTimeout(() => {
+      setBotIsFlipping(false);
+      setBotMood("happy");
+      setBotSpeech("Ta-da! Zoe is ready for more clinic missions! ✨");
+    }, 1000);
+  }
+
+  function handleMedicCheck() {
+    setBotMood("medic");
+    triggerBotAudio("chirp");
+    setBotSpeech(
+      `🩺 Clinic Diagnosis: ${appointments.length} appointments, ${patients.length} registered patients. Airtable & ADK live!`
+    );
+    setTimeout(() => setBotMood("happy"), 3800);
+  }
+
+  function handlePeepingBotClick() {
+    triggerBotAudio("chirp");
+    const isDoc = user?.role === "doctor";
+    setBotSpeech(isDoc ? "Hi Doc! Zoe here ✨ How can I help you today?" : "Hi Ma'am! Zoe here ✨ How can I help you today?");
+    setBotHubOpen(prev => !prev);
+  }
+
+  function handleDownloadPatientReport(patientName: string) {
+    triggerBotAudio("flip");
+    const pTarget = (patientName || "").trim().toLowerCase();
+    const matched = patients.find(
+      p => (p.fields[COL.name] || "").toLowerCase() === pTarget ||
+           (p.fields[COL.name] || "").toLowerCase().includes(pTarget) ||
+           pTarget.includes((p.fields[COL.name] || "").toLowerCase())
+    ) || patients[0];
+
+    const actualName = matched ? matched.fields[COL.name] : patientName;
+    const pAppts = matched
+      ? appointments.filter(
+          a =>
+            (a.fields[COL.name] || "").toLowerCase() === (matched.fields[COL.name] || "").toLowerCase() ||
+            (matched.fields[COL.email] && (a.fields[COL.email] || "").toLowerCase() === (matched.fields[COL.email] || "").toLowerCase())
+        )
+      : [];
+
+    downloadPatientPdf({
+      patientName: actualName,
+      patientAge: matched?.fields[COL.age],
+      patientGender: matched?.fields[COL.gender],
+      bloodGroup: matched?.fields[COL.bloodGroup],
+      email: matched?.fields[COL.email],
+      phone: matched?.fields[COL.phone],
+      medicalNotes: matched?.fields[COL.notes],
+      appointments: pAppts.map(a => ({
+        date: a.fields[COL.date] || "",
+        doctor: a.fields[COL.doctor] || "Consultant Physician",
+        mode: modeOf(a.fields),
+        status: a.fields[COL.status] || "Scheduled",
+        notes: a.fields[COL.notes] || "",
+      })),
+      staffName: user?.doctorName || user?.name || (user?.role === "doctor" ? "Attending Physician" : "Clinic Reception Desk"),
+    });
+
+    setToast(`📥 Downloaded Medical Report PDF for ${actualName}`);
+  }
+
+  function handleSendBotChat(overrideText?: string) {
+    const query = (overrideText || botInputText).trim();
+    if (!query) return;
+
+    const userMsg: BotChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: "user",
+      text: query,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    setBotChatMessages((prev) => [...prev, userMsg]);
+    if (!overrideText) setBotInputText("");
+    triggerBotAudio("chirp");
+    setBotIsTyping(true);
+
+    const qLower = query.toLowerCase();
+    const isDoc = user?.role === "doctor";
+
+    setTimeout(() => {
+      let botResponseText = "";
+      let pdfDownloadPatientName: string | undefined = undefined;
+
+      // Extract requested patient name
+      // 1. Direct match with registered patients
+      let matched = patients.find(p => {
+        const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+        if (!pName) return false;
+        return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
+      });
+
+      // 2. Pattern extraction for "give me report pdf of [name]" or "report pdf of [name]"
+      const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for)\s+([a-zA-Z\s]+)/i);
+      const extractedName = nameMatch ? nameMatch[1].trim() : "";
+
+      if (!matched && extractedName) {
+        matched = patients.find(p => {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          return pName.includes(extractedName.toLowerCase()) || extractedName.toLowerCase().includes(pName);
+        });
+      }
+
+      if (matched) {
+        const pName = matched.fields[COL.name] || "Patient";
+        pdfDownloadPatientName = pName;
+        setBotMood("medic");
+
+        botResponseText = isDoc
+          ? `Hi Doc! Here is the medical report PDF for ${pName}:`
+          : `Hi Ma'am! Here is the medical report PDF for ${pName}:`;
+
+        handleDownloadPatientReport(pName);
+      } else if (extractedName) {
+        setBotMood("happy");
+        botResponseText = isDoc
+          ? `Hi Doc! Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`
+          : `Hi Ma'am! Could not find any patient named '${extractedName}' in the clinic database. Please verify the name.`;
+      } else if (qLower.includes("hi") || qLower.includes("hello") || qLower.includes("hey") || qLower.includes("zoe")) {
+        setBotMood("happy");
+        botResponseText = isDoc
+          ? "Hi Doc! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat."
+          : "Hi Ma'am! Zoe here ✨ Tell me: 'Give me report pdf of [Patient Name]' to get their downloadable medical report PDF in chat.";
+      } else {
+        setBotMood("happy");
+        botResponseText = isDoc
+          ? "Hi Doc! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat."
+          : "Hi Ma'am! Zoe here ✨ Please specify the patient name, for example: 'Give me report pdf of [Patient Name]', and I will provide their downloadable PDF report in chat.";
+      }
+
+      const botMsg: BotChatMessage = {
+        id: `bot-${Date.now()}`,
+        sender: "bot",
+        text: botResponseText,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        pdfDownloadPatientName,
+      };
+
+      setBotChatMessages((prev) => [...prev, botMsg]);
+      setBotSpeech(botResponseText.slice(0, 75) + (botResponseText.length > 75 ? "…" : ""));
+      setBotIsTyping(false);
+      triggerBotAudio("purr");
+    }, 380);
+  }
+
+
   function addAgentLog(text: string, type: "info" | "success" | "warn" | "step" = "info") {
     const time = new Date().toLocaleTimeString();
     setArtAgentLogs((prev) => [...prev.slice(-40), { time, text, type }]);
@@ -1141,22 +1634,12 @@ interface ArtTaskLog {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("clinic_theme") as "light" | "dark" | null;
-      const initial = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      setTheme(initial);
-      document.documentElement.setAttribute("data-theme", initial);
-    } catch {
-      setTheme("light");
-    }
-  }, []);
-
-  function switchTheme(newTheme: "light" | "dark") {
-    setTheme(newTheme);
-    try {
-      localStorage.setItem("clinic_theme", newTheme);
-      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.removeItem("clinic_theme");
+      document.documentElement.removeAttribute("data-theme");
+      document.documentElement.setAttribute("data-theme", "light");
     } catch {}
-  }
+    setTheme("light");
+  }, []);
 
   const addMessage = (m: Omit<ArtMessage, "at">) =>
     setArtMessages(old =>
@@ -2373,6 +2856,18 @@ interface ArtTaskLog {
 
   return (
     <div className="dashboard-app-canvas">
+      {/* FIXED TOP-RIGHT SIGN OUT BUTTON */}
+      <button
+        type="button"
+        className="fixed-top-signout-btn"
+        onClick={() => void signOut()}
+        title={`Sign out (${user.name || user.email})`}
+        aria-label="Sign out"
+      >
+        <IconLogOut size={14} />
+        <span>Sign out</span>
+      </button>
+
       <div className="dashboard-frame">
         {/* SIDEBAR (MEDICARE / HEALTH CARE_ STYLE) */}
         <aside className="dashboard-sidebar">
@@ -2479,32 +2974,7 @@ interface ArtTaskLog {
             )}
           </nav>
 
-          {/* THEME SWITCHER (LIGHT / DARK MODE) */}
-          <div className="sidebar-theme-switch-wrapper">
-            <div className="theme-switch-label">Interface Mode</div>
-            <div className="theme-switch-toggle-pill">
-              <button
-                type="button"
-                className={`theme-toggle-btn ${theme === "light" ? "active" : ""}`}
-                onClick={() => switchTheme("light")}
-                title="Switch to Light Mode"
-              >
-                <IconSun size={13} />
-                <span>Light</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-toggle-btn ${theme === "dark" ? "active" : ""}`}
-                onClick={() => switchTheme("dark")}
-                title="Switch to Dark Mode"
-              >
-                <IconMoon size={13} />
-                <span>Dark</span>
-              </button>
-            </div>
-          </div>
-
-          {/* CLINICAL OPERATIONS STATUS & SIGNOUT CARD */}
+          {/* CLINICAL OPERATIONS STATUS CARD */}
           <div className="sidebar-promo-widget">
             <div className="promo-badge-tag">
               <span className="promo-status-dot" />
@@ -2512,23 +2982,6 @@ interface ArtTaskLog {
             </div>
             <div className="promo-title">Clinical Desk Pro</div>
             <div className="promo-subtitle">Live Agent & Multi-Platform Sync</div>
-            <div className="sidebar-utility-row">
-              <button
-                type="button"
-                className="sidebar-utility-btn"
-                onClick={() => { setSettingsOpen(true); void testIntegrations(); }}
-              >
-                <IconSettings size={12} />
-                <span>System</span>
-              </button>
-              <button
-                type="button"
-                className="sidebar-utility-btn signout"
-                onClick={() => void signOut()}
-              >
-                Sign out
-              </button>
-            </div>
           </div>
         </aside>
 
@@ -4597,67 +5050,219 @@ interface ArtTaskLog {
         </div>
       )}
 
-      {/* FLOATING BLUE ROBOT TRIGGER (NO TEXT, ONLY BLUE ROBOT, HOVERS UP ON HOVER/CLICK) */}
-      {!isDoctorRole && (
+      {/* CUTE PEEPING PLAYABLE MASCOT BOT (ZOE) */}
+      <div className="peeping-bot-container">
+        {/* Cute Floating Greeting Bubble */}
+        <div
+          className="peeping-bot-bubble"
+          onClick={handlePeepingBotClick}
+          title="Click Zoe to play & automate!"
+        >
+          <span style={{ fontSize: "13px" }}>✨</span>
+          <span>
+            {botMood === "pet"
+              ? "Yay! (≧◡≦)"
+              : user?.role === "doctor"
+              ? "Hi Doc! Zoe here ✨"
+              : "Hi Ma'am! Zoe here ✨"}
+          </span>
+        </div>
+
+        {/* Mascot Peeping Trigger Button */}
         <button
           type="button"
-          className="blue-robot-trigger"
-          onClick={() => setArtConsoleOpen(true)}
-          title="ART Multi-Agent Live Execution Console"
-          aria-label="ART Multi-Agent Live Execution Console"
+          className={`peeping-bot-trigger ${botIsFlipping ? "flipping" : ""}`}
+          onClick={handlePeepingBotClick}
+          title="ZOE - Clinic AI Assistant & Automation Companion"
+          aria-label="Open ZOE Clinic Assistant"
         >
-          <svg
-            width="58"
-            height="52"
-            viewBox="0 0 58 52"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Antenna with glow dot */}
-            <rect x="26.5" y="1" width="5" height="9" rx="2.5" fill="#38bdf8" />
-            <circle cx="29" cy="2.5" r="3.5" fill="#60a5fa" />
-
-            {/* Robot Head Outer Rounded Card */}
-            <rect x="3" y="9" width="52" height="43" rx="14" fill="url(#cuteBlueRobotGrad)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
-
-            {/* Inner Faceplate */}
-            <rect x="7" y="13" width="44" height="35" rx="10" fill="#1e3a8a" fillOpacity="0.3" />
-
-            {/* Rosy Cheeks */}
-            <ellipse cx="13.5" cy="34" rx="4" ry="2.2" fill="#f472b6" fillOpacity="0.8" />
-            <ellipse cx="44.5" cy="34" rx="4" ry="2.2" fill="#f472b6" fillOpacity="0.8" />
-
-            {/* Left Eye */}
-            <circle cx="19" cy="25" r="5.5" fill="#ffffff" />
-            <circle cx="20.5" cy="24" r="2.5" fill="#0f172a" />
-            <circle cx="21.5" cy="23" r="1" fill="#ffffff" />
-
-            {/* Right Eye */}
-            <circle cx="39" cy="25" r="5.5" fill="#ffffff" />
-            <circle cx="40.5" cy="24" r="2.5" fill="#0f172a" />
-            <circle cx="41.5" cy="23" r="1" fill="#ffffff" />
-
-            {/* Cute Happy Smile */}
-            <path
-              d="M24 33.5C26 36.5 32 36.5 34 33.5"
-              stroke="#ffffff"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-
-            <defs>
-              <linearGradient id="cuteBlueRobotGrad" x1="3" y1="9" x2="55" y2="52" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#60a5fa" />
-                <stop offset="0.4" stopColor="#3b82f6" />
-                <stop offset="1" stopColor="#1d4ed8" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <MediBotSvg
+            size={70}
+            isFlipping={botIsFlipping}
+            isBlushing={botCheekGlow || botMood === "pet"}
+            mood={botMood}
+          />
         </button>
+      </div>
+
+      {/* PLAYABLE BOT COMPANION HUB DRAWER (ZOE) */}
+      {botHubOpen && (
+        <div className="cute-bot-hub-wrapper">
+          <div className="cute-bot-hub-card">
+            {/* Header */}
+            <div className="cute-bot-hub-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div className="cute-bot-header-avatar">
+                  <span style={{ fontSize: "20px" }}>🤖</span>
+                  <span className="cute-bot-pulse-dot" />
+                </div>
+                <div>
+                  <div className="cute-bot-hub-title">ZOE AI Assistant</div>
+                  <div className="cute-bot-hub-subtitle">
+                    {user?.role === "doctor" ? "Physician AI Desk Companion" : "Reception Desk AI Companion"}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                  type="button"
+                  className="cute-bot-icon-btn"
+                  onClick={() => setBotSound(s => !s)}
+                  title={botSound ? "Mute cute sounds" : "Enable cute sounds"}
+                >
+                  {botSound ? "🔊" : "🔇"}
+                </button>
+                <button
+                  type="button"
+                  className="cute-bot-icon-btn close"
+                  onClick={() => setBotHubOpen(false)}
+                  title="Minimize Zoe"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Stage */}
+            <div className="cute-bot-stage">
+              {/* Floating Heart Particles */}
+              {botHearts.map(h => (
+                <span
+                  key={h.id}
+                  className="cute-bot-floating-heart"
+                  style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                >
+                  💖
+                </span>
+              ))}
+
+              {/* Speech */}
+              <div className="cute-bot-stage-speech">
+                <span>{botSpeech}</span>
+              </div>
+
+              {/* Big Interactive Avatar */}
+              <div
+                className={`cute-bot-big-avatar ${botIsFlipping ? "flipping" : ""} ${botMood === "pet" ? "blushing" : ""}`}
+                onClick={handlePetBot}
+                title="Click to pet Zoe! (≧◡≦)"
+              >
+                <MediBotSvg
+                  size={96}
+                  isFlipping={botIsFlipping}
+                  isBlushing={botCheekGlow || botMood === "pet"}
+                  mood={botMood}
+                />
+              </div>
+
+              {/* Play Buttons (The one below the bot mascot is preserved) */}
+              <div className="cute-bot-play-row">
+                <button
+                  type="button"
+                  className="cute-bot-play-btn pet"
+                  onClick={handlePetBot}
+                  title="Pet Zoe"
+                >
+                  <span>💖</span>
+                  <span>Pet Me!</span>
+                </button>
+                <button
+                  type="button"
+                  className="cute-bot-play-btn flip"
+                  onClick={handleFlipBot}
+                  disabled={botIsFlipping}
+                  title="Make Zoe do a backflip"
+                >
+                  <span>🤸</span>
+                  <span>Do a Flip!</span>
+                </button>
+                <button
+                  type="button"
+                  className="cute-bot-play-btn check"
+                  onClick={handleMedicCheck}
+                  title="Check clinic diagnosis"
+                >
+                  <span>🩺</span>
+                  <span>Diagnosis</span>
+                </button>
+              </div>
+            </div>
+
+            {/* INTERACTIVE PLAYABLE AI CHAT STREAM */}
+            <div className="cute-bot-chat-section">
+              <div className="cute-bot-chat-stream">
+                {botChatMessages.map((msg) => (
+                  <div key={msg.id} className={`cute-bot-msg ${msg.sender}`}>
+                    {msg.sender === "bot" && (
+                      <div className="cute-bot-msg-avatar">🤖</div>
+                    )}
+                    <div className="cute-bot-msg-content">
+                      <div className="cute-bot-msg-bubble">
+                        <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+
+                        {/* Instant Downloadable PDF Button in Chat Itself */}
+                        {msg.pdfDownloadPatientName && (
+                          <button
+                            type="button"
+                            className="cute-bot-pdf-btn"
+                            onClick={() => handleDownloadPatientReport(msg.pdfDownloadPatientName!)}
+                            title={`Download official PDF medical report for ${msg.pdfDownloadPatientName}`}
+                          >
+                            <span>📄</span>
+                            <span>Download {msg.pdfDownloadPatientName} Report (PDF)</span>
+                            <span>⬇️</span>
+                          </button>
+                        )}
+                      </div>
+                      <span className="cute-bot-msg-time">{msg.time}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {botIsTyping && (
+                  <div className="cute-bot-msg bot">
+                    <div className="cute-bot-msg-avatar">🤖</div>
+                    <div className="cute-bot-msg-bubble typing">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </div>
+                  </div>
+                )}
+                <div ref={botChatBottomRef} />
+              </div>
+
+              {/* Chat Input Form */}
+              <form
+                className="cute-bot-chat-input-row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendBotChat();
+                }}
+              >
+                <input
+                  type="text"
+                  className="cute-bot-chat-input"
+                  placeholder="Give me report pdf of [Patient Name]..."
+                  value={botInputText}
+                  onChange={(e) => setBotInputText(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="cute-bot-chat-send-btn"
+                  disabled={!botInputText.trim()}
+                  title="Send message to Zoe"
+                >
+                  <span>➤</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* ART MULTI-AGENT LIVE EXECUTION CONSOLE MODAL (Receptionist Only, manually triggered) */}
-      {!isDoctorRole && artConsoleOpen && (
+      {/* ART MULTI-AGENT LIVE EXECUTION CONSOLE MODAL (Manually triggered) */}
+      {artConsoleOpen && (
         <div
           className="art-console-modal-overlay"
           onMouseDown={(e) => {
