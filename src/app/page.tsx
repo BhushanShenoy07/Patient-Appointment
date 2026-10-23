@@ -1881,6 +1881,7 @@ interface ArtTaskLog {
   const [artFeatures, setArtFeatures] = useState<ArtFeature[]>(INITIAL_ART_FEATURES);
   const [artTaskHistory, setArtTaskHistory] = useState<ArtTaskLog[]>([]);
   const [artTaskFilter, setArtTaskFilter] = useState<"all" | "passed" | "failed" | "multi_agent" | "live_connect">("all");
+  const [selectedConnector, setSelectedConnector] = useState<string>("all");
 
   // Load persisted execution history from localStorage
   useEffect(() => {
@@ -3195,18 +3196,6 @@ interface ArtTaskLog {
 
   return (
     <div className="dashboard-app-canvas">
-      {/* FIXED TOP-RIGHT SIGN OUT BUTTON */}
-      <button
-        type="button"
-        className="fixed-top-signout-btn"
-        onClick={() => void signOut()}
-        title={`Sign out (${user.name || user.email})`}
-        aria-label="Sign out"
-      >
-        <IconLogOut size={14} />
-        <span>Sign out</span>
-      </button>
-
       <div className="dashboard-frame">
         {/* SIDEBAR (MEDICARE / HEALTH CARE_ STYLE) */}
         <aside className="dashboard-sidebar">
@@ -3478,6 +3467,17 @@ interface ArtTaskLog {
               >
                 <IconRefresh size={12} />
                 <span>{busy ? "Syncing…" : "Sync"}</span>
+              </button>
+
+              <button
+                type="button"
+                className="pill-btn-secondary pill-btn-signout"
+                onClick={() => void signOut()}
+                title={`Sign out (${user.name || user.email})`}
+                aria-label="Sign out"
+              >
+                <IconLogOut size={13} />
+                <span>Sign out</span>
               </button>
             </div>
           </header>
@@ -5036,7 +5036,7 @@ interface ArtTaskLog {
 
               {/* SECTION 1: ALL 6 ART FEATURES GRID */}
               <div style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
                   <div>
                     <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--ink-900)" }}>
                       ART Features Work & Diagnostics
@@ -5045,18 +5045,57 @@ interface ArtTaskLog {
                       Breakdown of each capability, what work it executes, and live pass/fail statistics.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="pill-btn-secondary"
-                    onClick={() => setArtConsoleOpen(true)}
-                    style={{ fontSize: "12px" }}
-                  >
-                    <span>🤖 Open Multi-Agent Console</span>
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <label htmlFor="art-connector-dropdown" style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-600)", whiteSpace: "nowrap" }}>
+                        Tool Connector:
+                      </label>
+                      <select
+                        id="art-connector-dropdown"
+                        className="art-connector-select"
+                        value={selectedConnector}
+                        onChange={(e) => setSelectedConnector(e.target.value)}
+                        aria-label="Filter tool connector"
+                      >
+                        <option value="all">⚡ All Tool Connectors ({artFeatures.length})</option>
+                        {artFeatures.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} ({f.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="pill-btn-secondary"
+                      onClick={() => setArtConsoleOpen(true)}
+                      style={{ fontSize: "12px" }}
+                    >
+                      <span>🤖 Open Multi-Agent Console</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="art-analytics-grid">
-                  {artFeatures.map((f) => {
+                {selectedConnector !== "all" && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "rgba(13,148,136,0.08)", borderRadius: "8px", border: "1px solid rgba(13,148,136,0.2)", marginBottom: "14px", fontSize: "12px" }}>
+                    <span style={{ color: "var(--teal-700)", fontWeight: 600 }}>
+                      Showing filtered view for <strong>{artFeatures.find(f => f.id === selectedConnector)?.name || selectedConnector}</strong>. Space saved.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConnector("all")}
+                      style={{ background: "transparent", border: "none", color: "var(--teal-700)", textDecoration: "underline", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}
+                    >
+                      Show all {artFeatures.length} connectors
+                    </button>
+                  </div>
+                )}
+
+                <div className={`art-analytics-grid ${selectedConnector !== "all" ? "single-view" : ""}`}>
+                  {artFeatures
+                    .filter((f) => selectedConnector === "all" || f.id === selectedConnector)
+                    .map((f) => {
                     const featureTotal = f.passedCount + f.failedCount;
                     const successPct = featureTotal > 0 ? Math.round((f.passedCount / featureTotal) * 100) : 100;
 
@@ -5389,34 +5428,25 @@ interface ArtTaskLog {
         </div>
       )}
 
-      {/* CUTE PEEPING PLAYABLE MASCOT BOT (ZOE) */}
-      <div className="peeping-bot-container">
-        {/* Cute Floating Greeting Bubble */}
-        <div
-          className="peeping-bot-bubble"
-          onClick={handlePeepingBotClick}
-          title="Click Zoe to assist & automate!"
-        >
-          <span style={{ fontSize: "13px" }}>✨</span>
-          <span>{botMood === "pet" ? "Yay! (≧◡≦)" : "Hi! Zoe here ✨"}</span>
+      {/* CUTE PEEPING PLAYABLE MASCOT BOT (ZOE) - DOCKED TO SIDE CORNER & HIDDEN WHEN OPEN */}
+      {!botHubOpen && (
+        <div className="peeping-bot-container">
+          <button
+            type="button"
+            className={`peeping-bot-trigger ${botIsFlipping ? "flipping" : ""}`}
+            onClick={handlePeepingBotClick}
+            title="Click to chat with Zoe (Clinic AI Assistant)"
+            aria-label="Open Zoe Clinic Assistant"
+          >
+            <MediBotSvg
+              size={54}
+              isFlipping={botIsFlipping}
+              isBlushing={botCheekGlow || botMood === "pet"}
+              mood={botMood}
+            />
+          </button>
         </div>
-
-        {/* Mascot Peeping Trigger Button */}
-        <button
-          type="button"
-          className={`peeping-bot-trigger ${botIsFlipping ? "flipping" : ""}`}
-          onClick={handlePeepingBotClick}
-          title="ZOE - Clinic AI Assistant"
-          aria-label="Open ZOE Clinic Assistant"
-        >
-          <MediBotSvg
-            size={70}
-            isFlipping={botIsFlipping}
-            isBlushing={botCheekGlow || botMood === "pet"}
-            mood={botMood}
-          />
-        </button>
-      </div>
+      )}
 
       {/* PLAYABLE BOT COMPANION HUB DRAWER (ZOE) */}
       {botHubOpen && (

@@ -2632,6 +2632,45 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 24px;
 }
 
+.art-analytics-grid.single-view {
+  grid-template-columns: 1fr;
+  max-width: 720px;
+}
+
+/* ART Connector Dropdown Selector */
+.art-connector-select {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line-200);
+  background: var(--surface);
+  color: var(--ink-900);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-xs);
+  min-width: 220px;
+}
+
+.art-connector-select:hover,
+.art-connector-select:focus {
+  border-color: var(--teal-500);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+[data-theme="dark"] .art-connector-select {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .art-connector-select:hover,
+[data-theme="dark"] .art-connector-select:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
 .art-feature-card {
   background: var(--surface);
   border: 1px solid var(--line-200);
@@ -2822,39 +2861,41 @@ input:focus, select:focus, textarea:focus {
 /* ==========================================================================
    FIXED TOP-RIGHT SIGN OUT BUTTON
    ========================================================================== */
+/* Sign Out Button in Action Bar */
+.pill-btn-signout {
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.04) !important;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.pill-btn-signout:hover {
+  background: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+.pill-btn-signout:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .pill-btn-signout {
+  border-color: rgba(248, 113, 113, 0.35) !important;
+  color: #f87171 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+[data-theme="dark"] .pill-btn-signout:hover {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4) !important;
+}
+
 .fixed-top-signout-btn {
-  position: fixed;
-  top: 18px;
-  right: 28px;
-  z-index: 9999;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 16px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(244, 63, 94, 0.28);
-  color: #e11d48;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.14), 0 1px 3px rgba(15, 23, 42, 0.05);
-  cursor: pointer;
-  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-  outline: none;
-}
-
-.fixed-top-signout-btn:hover {
-  background: #e11d48;
-  color: #ffffff;
-  border-color: #be123c;
-  transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 8px 24px rgba(225, 29, 72, 0.35);
-}
-
-.fixed-top-signout-btn:active {
-  transform: translateY(0) scale(0.97);
+  display: none !important;
 }
 
 /* ==========================================================================
@@ -2863,61 +2904,12 @@ input:focus, select:focus, textarea:focus {
 .peeping-bot-container {
   position: fixed;
   bottom: 0;
-  right: 28px;
+  right: 12px;
   z-index: 995;
   display: flex;
   flex-direction: column;
   align-items: center;
   pointer-events: none;
-}
-
-/* Cute Floating Speech / Greeting Bubble */
-.peeping-bot-bubble {
-  pointer-events: auto;
-  background: #ffffff;
-  color: #0f172a;
-  border: 1.5px solid #38bdf8;
-  border-radius: 14px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.25), 0 2px 6px rgba(15, 23, 42, 0.06);
-  margin-bottom: 6px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  animation: botBubbleFloat 3s ease-in-out infinite;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.peeping-bot-bubble:hover {
-  transform: scale(1.06);
-  border-color: #0284c7;
-  box-shadow: 0 10px 24px rgba(2, 132, 199, 0.35);
-}
-
-.peeping-bot-bubble::after {
-  content: "";
-  position: absolute;
-  bottom: -6px;
-  right: 28px;
-  width: 10px;
-  height: 6px;
-  background: #ffffff;
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  filter: drop-shadow(0 1px 0 #38bdf8);
-}
-
-@keyframes botBubbleFloat {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
 }
 
 /* The Peeping Bot Trigger Button */
@@ -2931,23 +2923,23 @@ input:focus, select:focus, textarea:focus {
   outline: none;
   display: flex;
   align-items: flex-end;
-  /* Peeping stance: submerged slightly below bottom edge, paws resting on the border! */
-  transform: translateY(14px);
-  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.35s ease;
-  filter: drop-shadow(0 8px 20px rgba(0, 242, 254, 0.45)) drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35));
+  /* Peeping stance: submerged cleanly at the corner, avoiding any screen text */
+  transform: translateY(22px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
+  filter: drop-shadow(0 4px 14px rgba(0, 242, 254, 0.4)) drop-shadow(0 2px 6px rgba(99, 102, 241, 0.3));
   animation: medibotPeepSway 3.6s ease-in-out infinite;
 }
 
 .peeping-bot-trigger:hover,
 .peeping-bot-trigger:focus-visible {
-  /* Hops up animatically from the bottom edge on hover! */
-  transform: translateY(-22px) scale(1.08);
-  filter: drop-shadow(0 14px 32px rgba(0, 242, 254, 0.7)) drop-shadow(0 6px 16px rgba(99, 102, 241, 0.55));
+  /* Hops up animatically from the bottom corner on hover */
+  transform: translateY(-8px) scale(1.08);
+  filter: drop-shadow(0 12px 28px rgba(0, 242, 254, 0.7)) drop-shadow(0 4px 14px rgba(99, 102, 241, 0.5));
   animation: medibotHoverBob 2.2s ease-in-out infinite alternate;
 }
 
 .peeping-bot-trigger:active {
-  transform: translateY(-28px) scale(1.14);
+  transform: translateY(-16px) scale(1.12);
 }
 
 .peeping-bot-trigger.flipping {
@@ -3030,13 +3022,13 @@ input:focus, select:focus, textarea:focus {
    ========================================================================== */
 .cute-bot-hub-wrapper {
   position: fixed;
-  bottom: 96px;
-  right: 28px;
+  bottom: 20px;
+  right: 20px;
   z-index: 998;
   width: 400px;
   max-width: calc(100vw - 32px);
   height: 620px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 40px);
   animation: botHubPopUp 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
