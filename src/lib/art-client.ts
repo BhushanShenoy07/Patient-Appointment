@@ -71,6 +71,23 @@ function dispatchIncoming(message: { event: string; content: Record<string, unkn
     return;
   }
 
+  // If this is an appointment alert, it MUST contain genuine patient details; otherwise discard default/dummy events
+  if (message.event !== "clinic_message") {
+    const pName = String(message?.content?.name || message?.content?.patientName || "").trim();
+    if (!pName || pName === "Patient Consultation" || pName.toLowerCase() === "patient") {
+      return;
+    }
+    const hasDetails = Boolean(
+      message?.content?.date ||
+      message?.content?.time ||
+      message?.content?.doctor ||
+      message?.content?.phone
+    );
+    if (!hasDetails) {
+      return;
+    }
+  }
+
   const id = typeof message?.content?.id === "string" ? message.content.id : "";
   if (id) {
     if (seenIds.has(id)) return;

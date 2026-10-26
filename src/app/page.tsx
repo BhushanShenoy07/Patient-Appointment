@@ -577,10 +577,23 @@ function Avatar({ person, online, large }: { person: Person; online?: boolean; l
   );
 }
 
-const messageText = (m: ArtMessage) =>
-  m.event === CHAT_EVENT
-    ? String(m.content.text || "")
-    : `Appointment · ${String(m.content.name || "Patient")} · ${String(m.content.date || "")} ${String(m.content.time || "")}`;
+const isRealAppointmentAlert = (m: ArtMessage) => {
+  if (m.event === CHAT_EVENT) return true;
+  const pName = String(m.content?.name || m.content?.patientName || "").trim();
+  if (!pName || pName === "Patient Consultation" || pName.toLowerCase() === "patient") {
+    return false;
+  }
+  return Boolean(m.content?.date || m.content?.time || m.content?.doctor || m.content?.phone);
+};
+
+const messageText = (m: ArtMessage) => {
+  if (m.event === CHAT_EVENT) {
+    return String(m.content?.text || "");
+  }
+  const name = String(m.content?.name || m.content?.patientName || "").trim();
+  const timeInfo = [m.content?.date, m.content?.time].filter(Boolean).join(" ");
+  return name ? `Appointment · ${name}${timeInfo ? ` · ${timeInfo}` : ""}` : "Notice";
+};
 
 function ChatPanel({
   messages,
@@ -612,7 +625,7 @@ function ChatPanel({
   const peer = people.find(p => p.artUsername.toLowerCase() === activePeer.toLowerCase());
   const thread = messages
     .filter(m => m.peer.toLowerCase() === activePeer.toLowerCase())
-    .filter(m => !(m.event === "appointment" && (!m.content?.name || m.content.name === "Patient Consultation" || String(m.content?.text || "").includes("Consultation Notice"))))
+    .filter(isRealAppointmentAlert)
     .slice()
     .reverse();
 
@@ -635,7 +648,7 @@ function ChatPanel({
     .map(p => {
       const own = messages
         .filter(m => m.peer.toLowerCase() === p.artUsername.toLowerCase())
-        .filter(m => !(m.event === "appointment" && (!m.content?.name || m.content.name === "Patient Consultation")));
+        .filter(isRealAppointmentAlert);
       return {
         person: p,
         last: own[0],
@@ -783,15 +796,21 @@ function ChatPanel({
                         ) : (
                           <div className="chat-appt-card-block">
                             <span className="chat-appt-card-badge">APPOINTMENT ALERT</span>
-                            <span className="chat-appt-patient-name">{String(m.content.name || m.content.patientName || "Patient Consultation")}</span>
+                            <span className="chat-appt-patient-name">{String(m.content.name || m.content.patientName || "Patient")}</span>
                             <span className="chat-appt-details">
-                              {[m.content.date, m.content.time, m.content.mode].filter(Boolean).join(" · ") || "Consultation Notice"}
+                              {[m.content.date, m.content.time, m.content.mode].filter(Boolean).join(" · ")}
                             </span>
                             {m.content.phone ? (
-                              <span className="chat-appt-details">Phone: {String(m.content.phone)}</span>
+                              <span className="chat-appt-details">📞 Phone: {String(m.content.phone)}</span>
+                            ) : null}
+                            {m.content.email ? (
+                              <span className="chat-appt-details">✉️ Email: {String(m.content.email)}</span>
                             ) : null}
                             {m.content.doctor ? (
                               <span className="chat-appt-details" style={{ opacity: 0.9 }}>Attending: {String(m.content.doctor)}</span>
+                            ) : null}
+                            {m.content.notes ? (
+                              <span className="chat-appt-details" style={{ fontStyle: "italic", marginTop: "2px" }}>Notes: {String(m.content.notes)}</span>
                             ) : null}
                           </div>
                         )}
@@ -2195,7 +2214,7 @@ interface ArtTaskLog {
   async function deliver(m: ArtMessage) {
     updateMessage(m.id, { status: "sending", reason: undefined });
     try {
-      const result = await sendToUser(m.peer, { ...m.content, id: m.id }, m.event === CHAT_EVENT ? CHAT_EVENT : undefined);
+      const result = await sendToUser(m.peer, { ...m.content, id: m.id }, m.event);
       updateMessage(m.id, result.delivered ? { status: "delivered" } : { status: "failed", reason: result.reason });
       return result;
     } catch (error) {
@@ -2237,7 +2256,7 @@ interface ArtTaskLog {
     );
   }
 
-  async function notifyByArt(payload: Fields) {
+  async function notifyByArt(payload: Record<string, any>) {
     const doctor = doctorOptions.find(d => doctorKey(d.name) === doctorKey(payload.doctor));
     const person = people.find(p => p.role === "doctor" && doctorKey(p.name) === doctorKey(payload.doctor));
     const artUsername = doctor?.artUsername || person?.artUsername;
@@ -2276,14 +2295,33 @@ interface ArtTaskLog {
     const fields = record.fields;
     setSendingMessageFor(record.id);
     try {
+      const rawTime = fields[COL.time];
+      let formattedTime = "";
+      if (rawTime !== undefined && rawTime !== null && String(rawTime).trim() !== "") {
+        const num = Number(rawTime);
+        if (!isNaN(num) && num > 0 && num <= 1440) {
+          formattedTime = labelTime(num);
+        } else {
+          const parsed = toMin(String(rawTime));
+          if (parsed !== null && !isNaN(parsed)) {
+            formattedTime = labelTime(parsed);
+          } else if (!String(rawTime).toLowerCase().includes("nan")) {
+            formattedTime = String(rawTime);
+          }
+        }
+      }
+
       await notifyByArt({
-        name: fields[COL.name],
+        name: fields[COL.name] || "Patient",
+        patientName: fields[COL.name] || "Patient",
         email: fields[COL.email] || "",
         phone: fields[COL.phone] || "",
         doctor: fields[COL.doctor] || "",
-        date: fields[COL.date] || "",
-        time: fields[COL.time] || "",
-        mode: modeOf(fields),
+        date: fields[COL.date] || isoDate(),
+        time: formattedTime,
+        mode: modeOf(fields) === "Online" ? "Online Telehealth" : "In-Person Clinic",
+        notes: fields[COL.notes] || "",
+        isManualNotification: true,
       });
 
       // Also trigger doctor email notification
@@ -2296,13 +2334,13 @@ interface ArtTaskLog {
           email: fields[COL.email],
           doctor: fields[COL.doctor],
           date: fields[COL.date],
-          time: fields[COL.time],
+          time: formattedTime || fields[COL.time],
           mode: modeOf(fields),
           notifyDoctor: true,
         }),
       }).catch(() => {});
 
-      setToast(`ADK appointment alert and notice dispatched to ${fields[COL.doctor]}.`);
+      setToast(`ADK appointment alert with details dispatched to ${fields[COL.doctor]}.`);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not send ADK notification.");
     } finally {
@@ -2413,18 +2451,37 @@ interface ArtTaskLog {
   useEffect(() => {
     if (!user) return;
     const off = onArtEvent(({ event, content }) => {
-      // Do not process dummy/generic "Patient Consultation" alert notices
-      if (
-        event === "appointment" &&
-        (!content?.name || content.name === "Patient Consultation" || String(content?.text || "").includes("Consultation Notice"))
-      ) {
+      // 1. Process regular staff chat messages
+      if (event === CHAT_EVENT) {
+        addMessage({
+          id: typeof content?.id === "string" ? content.id : crypto.randomUUID(),
+          direction: "in",
+          peer: String(content?.from || ""),
+          event: CHAT_EVENT,
+          content: content || {},
+          read: String(content?.from || "").toLowerCase() === activePeerRef.current.toLowerCase(),
+        });
         return;
       }
+
+      // 2. Process appointment alerts ONLY when explicitly notified with valid details
+      const patientName = String(content?.name || content?.patientName || "").trim();
+      const hasDetails =
+        patientName &&
+        patientName !== "Patient Consultation" &&
+        patientName.toLowerCase() !== "patient" &&
+        Boolean(content?.date || content?.time || content?.doctor || content?.phone);
+
+      if (!hasDetails) {
+        // Discard any default, dummy, or incomplete appointment notices
+        return;
+      }
+
       addMessage({
         id: typeof content?.id === "string" ? content.id : crypto.randomUUID(),
         direction: "in",
         peer: String(content?.from || ""),
-        event,
+        event: "appointment",
         content: content || {},
         read: String(content?.from || "").toLowerCase() === activePeerRef.current.toLowerCase(),
       });
