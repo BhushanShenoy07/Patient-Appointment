@@ -333,6 +333,52 @@ async function fetchTableRecords(tableId: string): Promise<any[]> {
   return records;
 }
 
+export function deduplicateRecordsList(records: any[]): any[] {
+  if (!Array.isArray(records) || records.length <= 1) return records || [];
+  const map = new Map<string, any>();
+  for (const item of records) {
+    if (!item) continue;
+    const f = item.fields || {};
+    const isAppt = Boolean(f["Appointment Date"] || f["Appointment Time"] || f["Doctor"]);
+    if (!isAppt) {
+      const email = String(f["Patient Email"] || f["Email"] || f["Patient Name"] || item.id).trim().toLowerCase();
+      const pKey = `patient_${email}`;
+      if (!map.has(pKey)) map.set(pKey, item);
+      continue;
+    }
+
+    const patientIdent = String(f["Patient Email"] || f["Email"] || f["Patient Name"] || f["Phone No"] || "").trim().toLowerCase();
+    const dateVal = String(f["Appointment Date"] || "").slice(0, 10).trim();
+    const timeVal = String(f["Appointment Time"] || "").trim();
+
+    if (!patientIdent || !dateVal || !timeVal) {
+      map.set(item.id, item);
+      continue;
+    }
+
+    const slotKey = `appt_${patientIdent}__${dateVal}__${timeVal}`;
+    const existing = map.get(slotKey);
+    if (!existing) {
+      map.set(slotKey, item);
+    } else {
+      const isRealId = (id: string) => /^rec[a-zA-Z0-9]{14,}/.test(id);
+      const ef = existing.fields || {};
+      const scoreA = (isRealId(item.id) ? 10 : 0) + (f["Zoom Join URL"] ? 5 : 0) + (f["Ticket ID"] ? 5 : 0);
+      const scoreB = (isRealId(existing.id) ? 10 : 0) + (ef["Zoom Join URL"] ? 5 : 0) + (ef["Ticket ID"] ? 5 : 0);
+      const chosen = scoreA >= scoreB ? item : existing;
+      const other = scoreA >= scoreB ? existing : item;
+      map.set(slotKey, {
+        ...chosen,
+        fields: {
+          ...other.fields,
+          ...chosen.fields,
+        },
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 export async function listAirtableRecords() {
   if (hasAirtableConfig()) {
     try {
@@ -399,12 +445,12 @@ export async function listAirtableRecords() {
         }
       }
 
-      return enriched;
+      return deduplicateRecordsList(enriched);
     } catch (error) {
       console.warn("Airtable API unreachable or failed; using resilient local clinic store:", error instanceof Error ? error.message : "unknown");
     }
   }
-  return JSON.parse(JSON.stringify(mockStore));
+  return deduplicateRecordsList(JSON.parse(JSON.stringify(mockStore)));
 }
 
 export async function saveAirtableRecord(
@@ -482,6 +528,37 @@ export async function saveAirtableRecord(
     }
   }
 
+  // Before inserting a new duplicate appointment row in Airtable, check if an appointment
+  // already exists for the same patient on this date and time slot
+  if (!currentId && isAppointment && hasAirtableConfig() && targetTable === c.table) {
+    try {
+      const pEmail = String(rawValues["Patient Email"] || rawValues["Email"] || "").trim().toLowerCase();
+      const pName = String(rawValues["Patient Name"] || "").trim().toLowerCase();
+      const apptDate = String(rawValues["Appointment Date"] || "").slice(0, 10).trim();
+      const apptTime = String(rawValues["Appointment Time"] || "").trim();
+
+      if ((pEmail || pName) && apptDate && apptTime) {
+        const existingAppts = await fetchTableRecords(c.table);
+        const match = existingAppts.find((r: any) => {
+          const rf = r.fields || {};
+          const rEmail = String(rf["Patient Email"] || rf["Email"] || "").trim().toLowerCase();
+          const rName = String(rf["Patient Name"] || "").trim().toLowerCase();
+          const rDate = String(rf["Appointment Date"] || "").slice(0, 10).trim();
+          const rTime = String(rf["Appointment Time"] || "").trim();
+          const rStatus = String(rf["Status"] || "").trim().toLowerCase();
+          if (rStatus === "cancelled") return false;
+          const patientMatches = (pEmail && rEmail === pEmail) || (pName && rName === pName);
+          return patientMatches && rDate === apptDate && (rTime === apptTime || rTime.startsWith(apptTime) || apptTime.startsWith(rTime));
+        });
+        if (match) {
+          currentId = match.id;
+        }
+      }
+    } catch {
+      // Continue with normal flow if check encounters network issue
+    }
+  }
+
   if (hasAirtableConfig()) {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -534,9 +611,24 @@ export async function saveAirtableRecord(
           }
         }
 
-        // Keep local mockStore in sync for fallback continuity
+        // Keep local mockStore in sync for fallback continuity (prevent duplicate appointment slots)
         if (result?.id) {
-          const idx = mockStore.findIndex(r => r.id === result.id || (currentId && r.id === currentId));
+          const isResultAppt = Boolean(result.fields?.["Appointment Date"] || result.fields?.["Appointment Time"]);
+          const pIdent = String(result.fields?.["Patient Email"] || result.fields?.["Patient Name"] || "").trim().toLowerCase();
+          const dVal = String(result.fields?.["Appointment Date"] || "").slice(0, 10).trim();
+          const tVal = String(result.fields?.["Appointment Time"] || "").trim();
+
+          const idx = mockStore.findIndex(r => {
+            if (r.id === result.id || (currentId && r.id === currentId)) return true;
+            if (isResultAppt && pIdent && dVal && tVal) {
+              const rf = r.fields || {};
+              const rIdent = String(rf["Patient Email"] || rf["Patient Name"] || "").trim().toLowerCase();
+              const rdVal = String(rf["Appointment Date"] || "").slice(0, 10).trim();
+              const rtVal = String(rf["Appointment Time"] || "").trim();
+              return rIdent === pIdent && rdVal === dVal && (rtVal === tVal || rtVal.startsWith(tVal) || tVal.startsWith(rtVal));
+            }
+            return false;
+          });
           if (idx >= 0) {
             mockStore[idx] = result;
           } else {
@@ -588,6 +680,23 @@ export async function saveAirtableRecord(
     if (existingIndex >= 0) {
       mockStore[existingIndex].fields = { ...mockStore[existingIndex].fields, ...values };
       return JSON.parse(JSON.stringify(mockStore[existingIndex]));
+    }
+  } else if (isAppointment) {
+    const pIdent = String(values["Patient Email"] || values["Email"] || values["Patient Name"] || "").trim().toLowerCase();
+    const dVal = String(values["Appointment Date"] || "").slice(0, 10).trim();
+    const tVal = String(values["Appointment Time"] || "").trim();
+    if (pIdent && dVal && tVal) {
+      const matchIdx = mockStore.findIndex(r => {
+        const rf = r.fields || {};
+        const rIdent = String(rf["Patient Email"] || rf["Email"] || rf["Patient Name"] || "").trim().toLowerCase();
+        const rdVal = String(rf["Appointment Date"] || "").slice(0, 10).trim();
+        const rtVal = String(rf["Appointment Time"] || "").trim();
+        return rIdent === pIdent && rdVal === dVal && (rtVal === tVal || rtVal.startsWith(tVal) || tVal.startsWith(rtVal));
+      });
+      if (matchIdx >= 0) {
+        mockStore[matchIdx].fields = { ...mockStore[matchIdx].fields, ...values };
+        return JSON.parse(JSON.stringify(mockStore[matchIdx]));
+      }
     }
   }
 

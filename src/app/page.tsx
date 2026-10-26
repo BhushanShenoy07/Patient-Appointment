@@ -109,6 +109,79 @@ const doctorKey = (s?: string) => low(s).replace(/^dr\.?\s*/, "");
 const isRegistered = (r: RecordItem) => low(r.fields[COL.status]) === "registered" && !r.fields[COL.date];
 const modeOf = (f: Fields) => f[COL.mode] || (f[COL.zoomId] ? "Online" : "Offline");
 
+function deduplicateAppointments(appts: RecordItem[]): RecordItem[] {
+  if (!Array.isArray(appts) || appts.length <= 1) return appts || [];
+  const map = new Map<string, RecordItem>();
+
+  for (const item of appts) {
+    if (!item) continue;
+    const f = item.fields || ({} as Fields);
+
+    // If it's a registered patient profile without an appointment date, key by patient identifier
+    if (isRegistered(item)) {
+      const pKey = `patient_${low(f[COL.email]) || low(f[COL.name]) || item.id}`;
+      if (!map.has(pKey)) {
+        map.set(pKey, item);
+      }
+      continue;
+    }
+
+    // Appointment deduplication key: (patient identity + appointment date + appointment time slot)
+    const patientIdent = low(f[COL.email]) || low(f[COL.name]) || low(f[COL.phone]);
+    const dateVal = String(f[COL.date] || "").slice(0, 10);
+    const timeMin = toMin(f[COL.time]);
+    const timeVal = timeMin !== null ? String(timeMin) : low(f[COL.time]);
+
+    // If missing patient, date or time, don't deduplicate by slot, just key by id
+    if (!patientIdent || !dateVal || !timeVal) {
+      map.set(item.id, item);
+      continue;
+    }
+
+    const slotKey = `appt_${patientIdent}__${dateVal}__${timeVal}`;
+    const existing = map.get(slotKey);
+
+    if (!existing) {
+      map.set(slotKey, item);
+    } else {
+      // Merge: Keep ONLY 1 copy! Prefer the most complete/authoritative record.
+      const ef = existing.fields || ({} as Fields);
+
+      const isRealId = (id: string) => /^rec[a-zA-Z0-9]{14,}/.test(id);
+      const scoreRealId = (isRealId(item.id) ? 10 : 0) - (isRealId(existing.id) ? 10 : 0);
+      const scoreZoom = (f[COL.zoomUrl] ? 5 : 0) - (ef[COL.zoomUrl] ? 5 : 0);
+      const scoreTicket = (f[COL.ticketId] ? 5 : 0) - (ef[COL.ticketId] ? 5 : 0);
+      const itemCancelled = low(f[COL.status]) === "cancelled";
+      const existingCancelled = low(ef[COL.status]) === "cancelled";
+      const scoreStatus = (!itemCancelled && existingCancelled ? 10 : 0) - (itemCancelled && !existingCancelled ? 10 : 0);
+
+      const totalDiff = scoreRealId + scoreZoom + scoreTicket + scoreStatus;
+
+      const chosen = totalDiff >= 0 ? item : existing;
+      const other = totalDiff >= 0 ? existing : item;
+
+      const mergedFields: Fields = {
+        ...other.fields,
+        ...chosen.fields,
+        [COL.ticketId]: chosen.fields[COL.ticketId] || other.fields[COL.ticketId] || "",
+        [COL.zoomId]: chosen.fields[COL.zoomId] || other.fields[COL.zoomId] || "",
+        [COL.zoomUrl]: chosen.fields[COL.zoomUrl] || other.fields[COL.zoomUrl] || "",
+        [COL.calendarId]: chosen.fields[COL.calendarId] || other.fields[COL.calendarId] || "",
+        [COL.phone]: chosen.fields[COL.phone] || other.fields[COL.phone] || "",
+        [COL.bloodGroup]: chosen.fields[COL.bloodGroup] || other.fields[COL.bloodGroup] || "",
+        [COL.notes]: chosen.fields[COL.notes] || other.fields[COL.notes] || "",
+      };
+
+      map.set(slotKey, {
+        id: chosen.id,
+        fields: mergedFields,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 const FALLBACK_DOCTORS: DoctorOption[] = [
   { name: "Dr. Ananya Rao", specialization: "General Medicine", email: "ananyarao@clinic.com" },
   { name: "Dr. Arjun Mehta", specialization: "Cardiology", email: "arjunmehta@clinic.com" },
@@ -2615,7 +2688,7 @@ interface ArtTaskLog {
   }, [records]);
 
   const appointments = useMemo(() => {
-    const base = records.filter(r => !isRegistered(r));
+    const base = deduplicateAppointments(records.filter(r => !isRegistered(r)));
     if (user?.role === "doctor" && user.doctorName) {
       const normalize = (s?: string) => String(s || "").toLowerCase().replace(/^dr\.?\s*/, "").trim();
       const myDoc = normalize(user.doctorName);
@@ -2687,10 +2760,11 @@ interface ArtTaskLog {
       const response = await fetch("/api/clinic/records");
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Could not load clinic records.");
-      const incoming = body.records || [];
+      const incoming = deduplicateAppointments(body.records || []);
       setRecords(prev => {
-        if (prev.length === incoming.length && JSON.stringify(prev) === JSON.stringify(incoming)) {
-          return prev;
+        const currentDeduped = deduplicateAppointments(prev);
+        if (currentDeduped.length === incoming.length && JSON.stringify(currentDeduped) === JSON.stringify(incoming)) {
+          return currentDeduped;
         }
         return incoming;
       });
@@ -2916,7 +2990,6 @@ interface ArtTaskLog {
   }
 
   async function saveRecord(id: string | null, fields: Fields, clearFields: string[] = []) {
-    void triggerAgent("airtable", `Synchronize clinic record for patient ${fields[COL.name] || "patient"}.`);
     const cleanFields = { ...fields };
     const readOnlyKeys = [
       "Created Time", "Created time", "created_time", "createdTime", "Created",
@@ -2943,7 +3016,6 @@ interface ArtTaskLog {
   }
 
   async function zoomCall(method: string, path: string, appointmentMode: "Online", body?: Record<string, string | number>) {
-    void triggerAgent("zoom", `Create or update telehealth consultation meeting.`);
     try {
       const response = await fetch(`/api/zoom${path}`, {
         method,
@@ -2960,7 +3032,6 @@ interface ArtTaskLog {
   }
 
   async function calendarCall(body: Record<string, string | number>) {
-    void triggerAgent("calendar", `Book Google Calendar appointment for patient ${body.name || "patient"} on ${body.date} at ${body.time}.`);
     try {
       const response = await fetch("/api/calendar", {
         method: "POST",
@@ -3105,10 +3176,18 @@ interface ArtTaskLog {
       );
 
       setRecords(old => {
-        if (!editingPatient) return [saved, ...old];
-        const exists = old.some(r => r.id === saved.id);
-        if (exists) return old.map(r => (r.id === saved.id ? saved : r));
-        return [saved, ...old];
+        const pEmail = low(saved.fields[COL.email]);
+        const pName = low(saved.fields[COL.name]);
+        const filtered = old.filter(r => {
+          if (r.id === saved.id) return false;
+          if (isRegistered(r)) {
+            const rf = r.fields;
+            if (pEmail && low(rf[COL.email]) === pEmail) return false;
+            if (pName && low(rf[COL.name]) === pName) return false;
+          }
+          return true;
+        });
+        return deduplicateAppointments([saved, ...filtered]);
       });
       setPatientForm({ name: "", email: "", phone: "", bloodGroup: "", notes: "", age: "", gender: "Other" });
       setEditingPatient(null);
@@ -3123,23 +3202,46 @@ interface ArtTaskLog {
 
   async function handleAppointmentSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     const patient = patients.find(p => p.id === appt.patient) || records.find(r => r.id === editingAppt);
     if (!patient || !appt.doctor.trim() || !appt.date || appt.time === null) {
       return setToast("Specify patient, physician, date, and available time slot.");
     }
 
+    const f = patient.fields;
+    const patientEmail = low(f[COL.email]);
+    const patientName = low(f[COL.name]);
+
+    // Check if an existing appointment already exists for this patient on this date and time
+    const existingPatientAppt = appointments.find(r => {
+      const rf = r.fields;
+      const samePatient = (patientEmail && low(rf[COL.email]) === patientEmail) ||
+                          (patientName && low(rf[COL.name]) === patientName);
+      if (!samePatient) return false;
+      if (low(rf[COL.status]) === "cancelled") return false;
+      return rf[COL.date] === appt.date && toMin(rf[COL.time]) === appt.time;
+    });
+
+    const targetAppointmentId = editingAppt || (existingPatientAppt ? existingPatientAppt.id : null);
+
     const conflict = appointments.find(
       r =>
-        r.id !== editingAppt &&
+        r.id !== targetAppointmentId &&
         low(r.fields[COL.status]) !== "cancelled" &&
         r.fields[COL.date] === appt.date &&
-        low(r.fields[COL.doctor]) === low(appt.doctor) &&
+        doctorKey(r.fields[COL.doctor]) === doctorKey(appt.doctor) &&
         toMin(r.fields[COL.time]) === appt.time
     );
-    if (conflict) return setToast("Selected physician already has a consultation at this time slot.");
+    if (conflict) {
+      const cf = conflict.fields;
+      const conflictSamePatient = (patientEmail && low(cf[COL.email]) === patientEmail) ||
+                                  (patientName && low(cf[COL.name]) === patientName);
+      if (!conflictSamePatient) {
+        return setToast("Selected physician already has a consultation at this time slot.");
+      }
+    }
 
-    const f = patient.fields;
-    const existing = editingAppt ? appointments.find(r => r.id === editingAppt) : undefined;
+    const existing = targetAppointmentId ? appointments.find(r => r.id === targetAppointmentId) : undefined;
     const clinicalNotes = appt.notes.trim() || f[COL.notes] || "";
     const existingTicketId = appt.ticketId?.trim() || existing?.fields[COL.ticketId] || "";
 
@@ -3258,39 +3360,34 @@ interface ArtTaskLog {
       const clearZoomFields = appt.mode === "Offline" || low(appt.status) === "cancelled" ? [COL.zoomId, COL.zoomUrl, COL.calendarId] : [];
       let saved: RecordItem | null = null;
       try {
-        saved = await saveRecord(editingAppt, fields, clearZoomFields);
-        setRecords(old => (editingAppt ? old.map(r => (r.id === saved!.id ? saved! : r)) : [saved!, ...old]));
+        saved = await saveRecord(targetAppointmentId, fields, clearZoomFields);
+        setRecords(old => {
+          const filtered = old.filter(r => {
+            if (saved && r.id === saved.id) return false;
+            if (targetAppointmentId && r.id === targetAppointmentId) return false;
+            const rf = r.fields;
+            const samePatient = (patientEmail && low(rf[COL.email]) === patientEmail) ||
+                                (patientName && low(rf[COL.name]) === patientName);
+            const sameSlot = rf[COL.date] === appt.date && toMin(rf[COL.time]) === appt.time;
+            if (samePatient && sameSlot) return false;
+            return true;
+          });
+          return deduplicateAppointments([saved!, ...filtered]);
+        });
         const airDur = `${((performance.now() - airStart) / 1000).toFixed(2)}s`;
-        recordArtTaskExecution("airtable", editingAppt ? "update_appointment_record" : "create_appointment_record", "PASSED", `Appointment record for ${f[COL.name]} saved to Airtable clinical database.`, airDur);
+        recordArtTaskExecution("airtable", targetAppointmentId ? "update_appointment_record" : "create_appointment_record", "PASSED", `Appointment record for ${f[COL.name]} saved to Airtable clinical database.`, airDur);
       } catch (airErr) {
         const airDur = `${((performance.now() - airStart) / 1000).toFixed(2)}s`;
-        recordArtTaskExecution("airtable", editingAppt ? "update_appointment_record" : "create_appointment_record", "FAILED", `Airtable save error: ${airErr instanceof Error ? airErr.message : "Database error"}`, airDur);
+        recordArtTaskExecution("airtable", targetAppointmentId ? "update_appointment_record" : "create_appointment_record", "FAILED", `Airtable save error: ${airErr instanceof Error ? airErr.message : "Database error"}`, airDur);
         throw airErr;
       }
 
-      let emailNotice = "";
-      if (["scheduled", "cancelled", "confirmed"].includes(low(fields[COL.status]))) {
-        try {
-          const emailResult = await sendAppointmentEmail({ ...saved, fields: { ...fields, ...saved.fields } });
-          if (emailResult?.ok) {
-            const ticketTag = emailResult.patientTicketId ? ` (Ticket #${emailResult.patientTicketId})` : "";
-            emailNotice = ` Email confirmation dispatched to patient and physician via Freshdesk${ticketTag}.`;
-            if (emailResult.patientTicketId) {
-              const tid = String(emailResult.patientTicketId);
-              setRecords(old => old.map(r => r.id === saved.id ? { ...r, fields: { ...r.fields, [COL.ticketId]: tid } } : r));
-            }
-          }
-        } catch (mailErr) {
-          console.warn("Notice: could not dispatch Freshdesk notification:", mailErr);
-        }
-      }
-
       setToast(
-        editingAppt
-          ? `Appointment record updated in database.${emailNotice}`
+        targetAppointmentId
+          ? "Appointment record updated in database."
           : appt.mode === "Online"
-            ? `Online Telehealth consultation scheduled and saved to database. Video room prepared.${emailNotice}`
-            : `In-person clinical appointment scheduled and saved to database.${emailNotice}`
+            ? "Online Telehealth consultation scheduled and saved to database."
+            : "In-person clinical appointment scheduled and saved to database."
       );
 
       setSelectedDay(appt.date);
@@ -3361,16 +3458,8 @@ interface ArtTaskLog {
       };
       const clearFields = [COL.calendarId, COL.zoomId, COL.zoomUrl];
       const saved = await saveRecord(r.id, updatedFields, clearFields);
-      let cancelNotice = "";
-      try {
-        const mailRes = await sendAppointmentEmail({ ...saved, fields: { ...updatedFields, ...saved.fields } });
-        if (mailRes?.ok) {
-          cancelNotice = " Cancellation notices dispatched to patient & physician via Freshdesk.";
-        }
-      } catch (err) {
-        console.warn("Could not dispatch cancellation notice:", err);
-      }
-      setToast(`Appointment marked as Cancelled in database.${cancelNotice}`);
+      setRecords(old => deduplicateAppointments(old.map(item => item.id === saved.id ? saved : item)));
+      setToast("Appointment marked as Cancelled in database.");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Error cancelling appointment.");
     }
