@@ -475,6 +475,66 @@ export function extractAttendingDoctor(ticket: {
   return null;
 }
 
+export function normalizeMessageForDedup(text: string): string {
+  if (!text) return "";
+  let cleaned = String(text);
+  cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
+  cleaned = cleaned.replace(/<[^>]*>/g, " ");
+  cleaned = cleaned.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*(?:Sent by\s+)?Dr\.[\s\S]*$/i, "");
+  cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "");
+  cleaned = cleaned.replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "");
+  cleaned = cleaned.replace(/Delivered via Freshdesk[\s\S]*$/i, "");
+  cleaned = cleaned.split(/(?:\r?\n)+(?:On\s+.*?(?:wrote:|<.*?>)|\-+\s*Original Message\s*\-+|\-+\s*Forwarded message\s*\-+)/i)[0];
+  cleaned = cleaned.replace(/^\s*>.*$/gm, "");
+  return cleaned.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function isDuplicateConversation(
+  a: { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string },
+  b: { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string }
+): boolean {
+  if (!a || !b) return false;
+  if (a.id && b.id && String(a.id) === String(b.id)) return true;
+
+  const roleA = Boolean(a.incoming);
+  const roleB = Boolean(b.incoming);
+  if (roleA !== roleB) return false;
+
+  const textA = normalizeMessageForDedup(a.message || "");
+  const textB = normalizeMessageForDedup(b.message || "");
+  if (textA && textB && textA === textB) {
+    if (a.createdAt && b.createdAt) {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (!isNaN(timeA) && !isNaN(timeB)) {
+        return Math.abs(timeA - timeB) <= 12 * 60 * 60 * 1000;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+export function deduplicateConversationsList<T extends { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string }>(convs: T[]): T[] {
+  if (!Array.isArray(convs) || convs.length <= 1) return convs || [];
+  const deduped: T[] = [];
+  for (const c of convs) {
+    const existingIndex = deduped.findIndex(existing => isDuplicateConversation(existing, c));
+    if (existingIndex === -1) {
+      deduped.push(c);
+    } else {
+      const existing = deduped[existingIndex];
+      const existingIsLocal = String(existing.id || "").startsWith("reply_") || String(existing.id || "").startsWith("local_");
+      const currentIsLocal = String(c.id || "").startsWith("reply_") || String(c.id || "").startsWith("local_");
+      if (existingIsLocal && !currentIsLocal) {
+        deduped[existingIndex] = c;
+      }
+    }
+  }
+  return deduped;
+}
+
 function getTicketsFromDisk(): any[] {
   try {
     if (fs.existsSync(DISK_CACHE_PATH)) {
@@ -485,6 +545,7 @@ function getTicketsFromDisk(): any[] {
           .filter(isClinicalTicket)
           .map(t => ({
             ...t,
+            conversations: deduplicateConversationsList(t.conversations || []),
             attendingDoctor: t.attendingDoctor || extractAttendingDoctor(t),
           }));
       }
@@ -639,14 +700,13 @@ export async function getClinicTicketsWithConversations(limit = 30) {
               // Preserve any cached local replies not yet indexed by Freshdesk
               if (cached && Array.isArray(cached.conversations) && cached.conversations.length > 0) {
                 for (const existing of cached.conversations) {
-                  const exists = conversations.some((c: any) =>
-                    c.id === existing.id || (c.message && existing.message && c.message.trim() === existing.message.trim())
-                  );
+                  const exists = conversations.some((c: any) => isDuplicateConversation(c, existing));
                   if (!exists) {
                     conversations.push(existing);
                   }
                 }
               }
+              conversations = deduplicateConversationsList(conversations);
               conversationCache.set(String(t.id), { updatedAt: t.updated_at, conversations });
             } catch (convErr) {
               console.warn(`Could not load conversations for ticket #${t.id}:`, convErr instanceof Error ? convErr.message : convErr);
@@ -720,18 +780,19 @@ export async function getClinicTicketsWithConversations(limit = 30) {
             const fsConvs = fsConvMap.get(matchingFs.id) || [];
             for (const fsc of fsConvs) {
               const cleanText = (fsc.body_text || fsc.body || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-              const alreadyHas = (t.conversations || []).some((c: any) => c.message === cleanText);
+              const sentMatch = cleanText.match(/— Sent by (.*?)(?:\n|$)/);
+              const sender = sentMatch ? sentMatch[1].trim() : (fsc.incoming ? (matchingFs.requester?.name || t.name || "Patient") : "Doctor / Staff");
+              const fsItem = {
+                id: `fs_${fsc.id}`,
+                incoming: Boolean(fsc.incoming),
+                from: sender,
+                message: cleanText,
+                createdAt: fsc.created_at,
+              };
+              const alreadyHas = (t.conversations || []).some((c: any) => isDuplicateConversation(c, fsItem));
               if (!alreadyHas && cleanText) {
-                const sentMatch = cleanText.match(/— Sent by (.*?)(?:\n|$)/);
-                const sender = sentMatch ? sentMatch[1].trim() : (fsc.incoming ? (matchingFs.requester?.name || t.name || "Patient") : "Doctor / Staff");
                 t.conversations = t.conversations || [];
-                t.conversations.push({
-                  id: `fs_${fsc.id}`,
-                  incoming: Boolean(fsc.incoming),
-                  from: sender,
-                  message: cleanText,
-                  createdAt: fsc.created_at,
-                });
+                t.conversations.push(fsItem);
                 t.hasReplies = true;
               }
             }
@@ -782,10 +843,13 @@ export async function getClinicTicketsWithConversations(limit = 30) {
       }
     }
 
-    // Ensure all conversations are chronologically ordered (oldest first, newest last)
+    // Ensure all conversations are chronologically ordered (oldest first, newest last) and strictly deduplicated
     for (const t of enriched) {
-      if (Array.isArray(t.conversations) && t.conversations.length > 1) {
-        t.conversations.sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+      if (Array.isArray(t.conversations)) {
+        t.conversations = deduplicateConversationsList(t.conversations);
+        if (t.conversations.length > 1) {
+          t.conversations.sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+        }
       }
     }
 
@@ -931,12 +995,12 @@ export async function replyToFreshdeskTicket(ticketId: number | string, replyMes
   const updateConvCacheForId = (idKey: string) => {
     const existing = convCache.get(idKey);
     const convs = existing?.conversations ? [...existing.conversations] : [];
-    if (!convs.some((c: any) => c.message === cleanReply)) {
+    if (!convs.some((c: any) => isDuplicateConversation(c, replyItem))) {
       convs.push(replyItem);
     }
     convCache.set(idKey, {
       updatedAt: new Date().toISOString(),
-      conversations: convs,
+      conversations: deduplicateConversationsList(convs),
     });
   };
 

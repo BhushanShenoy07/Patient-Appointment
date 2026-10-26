@@ -1056,6 +1056,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: ClinicUser) => void }) {
 function cleanPatientMessage(text: string): string {
   if (!text) return "";
   let cleaned = text;
+  cleaned = cleaned.replace(/<[^>]*>/g, " ");
+  cleaned = cleaned.replace(/&nbsp;/g, " ");
   cleaned = cleaned.split(/(?:\r?\n)+(?:On\s+.*?(?:wrote:|<.*?>)|\-+\s*Original Message\s*\-+|\-+\s*Forwarded message\s*\-+)/i)[0];
   cleaned = cleaned.replace(/^\s*>.*$/gm, "");
   const trimmed = cleaned.trim();
@@ -1065,12 +1067,67 @@ function cleanPatientMessage(text: string): string {
 function cleanDoctorMessage(text: string): string {
   if (!text) return "";
   let cleaned = text;
+  cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
+  cleaned = cleaned.replace(/<[^>]*>/g, " ");
+  cleaned = cleaned.replace(/&nbsp;/g, " ");
   cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*(?:Sent by\s+)?Dr\.[\s\S]*$/i, "");
   cleaned = cleaned.replace(/[\s\r\n]*—[\s\r\n]*Sent by[\s\S]*$/i, "");
   cleaned = cleaned.replace(/^[?💬\s]*(?:Dr\.[^C\n]+|Clinic Reception Desk|Reception Desk)[\s\S]*?(?:Clinic Desk Live Connect|Live Connect)\s*/i, "");
   cleaned = cleaned.replace(/Delivered via Freshdesk[\s\S]*$/i, "");
   const trimmed = cleaned.trim();
   return trimmed || text.trim();
+}
+
+function isDuplicateConv(
+  a: { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string },
+  b: { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string }
+): boolean {
+  if (!a || !b) return false;
+  if (a.id && b.id && String(a.id) === String(b.id)) return true;
+
+  const roleA = Boolean(a.incoming);
+  const roleB = Boolean(b.incoming);
+  if (roleA !== roleB) return false;
+
+  const textA = (roleA ? cleanPatientMessage(a.message || "") : cleanDoctorMessage(a.message || ""))
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const textB = (roleB ? cleanPatientMessage(b.message || "") : cleanDoctorMessage(b.message || ""))
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (textA && textB && textA === textB) {
+    if (a.createdAt && b.createdAt) {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (!isNaN(timeA) && !isNaN(timeB)) {
+        return Math.abs(timeA - timeB) <= 12 * 60 * 60 * 1000;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+function deduplicateConversations<T extends { id?: string | number; message?: string; incoming?: boolean; from?: string; createdAt?: string }>(convs: T[]): T[] {
+  if (!Array.isArray(convs) || convs.length <= 1) return convs || [];
+  const deduped: T[] = [];
+  for (const c of convs) {
+    const existingIndex = deduped.findIndex(existing => isDuplicateConv(existing, c));
+    if (existingIndex === -1) {
+      deduped.push(c);
+    } else {
+      const existing = deduped[existingIndex];
+      const existingIsLocal = String(existing.id || "").startsWith("local_");
+      const currentIsLocal = String(c.id || "").startsWith("local_");
+      if (existingIsLocal && !currentIsLocal) {
+        deduped[existingIndex] = c;
+      }
+    }
+  }
+  return deduped;
 }
 
 export default function Home() {
@@ -2667,27 +2724,26 @@ interface ArtTaskLog {
               return {
                 ...incomingItem,
                 hasReplies: true,
-                conversations: existingConvs,
+                conversations: deduplicateConversations(existingConvs),
               };
             }
 
-            // Combine conversations: take all incoming, and preserve any local unmerged conversations
+            // Combine conversations: take all incoming, and preserve any local unmerged conversations ONLY if not yet in incomingConvs
             const combinedConvs = [...incomingConvs];
             for (const ec of existingConvs) {
-              const alreadyPresent = incomingConvs.some(
-                ic => ic.id === ec.id || (ic.message && ec.message && ic.message.trim() === ec.message.trim())
-              );
+              const alreadyPresent = incomingConvs.some(ic => isDuplicateConv(ic, ec));
               if (!alreadyPresent) {
                 combinedConvs.push(ec);
               }
             }
 
-            combinedConvs.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+            const finalConvs = deduplicateConversations(combinedConvs);
+            finalConvs.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
             return {
               ...incomingItem,
-              hasReplies: incomingItem.hasReplies || combinedConvs.length > 0,
-              conversations: combinedConvs,
+              hasReplies: incomingItem.hasReplies || finalConvs.length > 0,
+              conversations: finalConvs,
             };
           });
 
@@ -2716,6 +2772,7 @@ interface ArtTaskLog {
 
   async function submitTicketReply(ticketId: string, recipientName: string) {
     if (user?.role === "receptionist") return;
+    if (sendingReply) return;
     if (!replyMessageText.trim()) return;
     const msgToSend = replyMessageText.trim();
     setSendingReply(true);
@@ -2729,14 +2786,18 @@ interface ArtTaskLog {
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistically update conversations so the doctor immediately sees their reply
+    // Optimistically update conversations so the doctor immediately sees their reply (deduplicated)
     setFollowupUpdates(prev =>
       prev.map(item => {
         if (String(item.id) === String(ticketId) || String(item.fsId) === String(ticketId)) {
+          const currentConvs = item.conversations || [];
+          if (currentConvs.some(c => isDuplicateConv(c, optimisticConv))) {
+            return item;
+          }
           return {
             ...item,
             hasReplies: true,
-            conversations: [...(item.conversations || []), optimisticConv],
+            conversations: deduplicateConversations([...currentConvs, optimisticConv]),
           };
         }
         return item;
@@ -4859,7 +4920,14 @@ interface ArtTaskLog {
                                   borderRadius: "12px",
                                 }}
                               >
-                                💬 {u.conversations && u.conversations.length > 0 ? `${u.conversations.length} ${u.conversations.length === 1 ? "Conversation" : "Conversations"}` : "Reply Received"}
+                                {(() => {
+                                  const count = deduplicateConversations(u.conversations || []).length;
+                                  return (
+                                    <span>
+                                      💬 {count > 0 ? `${count} ${count === 1 ? "Conversation" : "Conversations"}` : "Reply Received"}
+                                    </span>
+                                  );
+                                })()}
                               </span>
                             )}
                           </div>
@@ -4922,7 +4990,11 @@ interface ArtTaskLog {
                         u.message.trim().length > 0 &&
                         !u.message.includes("Clinic Desk Live Connect") &&
                         !u.message.includes("Consultant Physician") &&
-                        !(hasConversations && u.conversations!.some(c => (c.message || "").trim() === u.message.trim()))
+                        !(hasConversations && u.conversations!.some(c => {
+                          const cClean = cleanPatientMessage(c.message || "").replace(/\s+/g, " ").trim().toLowerCase();
+                          const uClean = cleanPatientMessage(u.message || "").replace(/\s+/g, " ").trim().toLowerCase();
+                          return cClean && uClean && cClean === uClean;
+                        }))
                       ) && (
                         <div className="wa-bubble-row incoming">
                           <div className="wa-bubble incoming">
@@ -4945,7 +5017,7 @@ interface ArtTaskLog {
                       )}
 
                       {/* Conversation Dialogue (WhatsApp Back-and-Forth Thread) */}
-                      {hasConversations && u.conversations!.map(c => {
+                      {hasConversations && deduplicateConversations(u.conversations!).map(c => {
                         const rawMsg = c.message || "";
                         const fromStr = (c.from || "").trim();
 
