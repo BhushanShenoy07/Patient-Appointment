@@ -1151,7 +1151,7 @@ export default function Home() {
   // Cute Playable Mascot Bot State & AI Chat Engine (ZOE)
   const [botHubOpen, setBotHubOpen] = useState(false);
   const [botMood, setBotMood] = useState<"happy" | "pet" | "flip" | "medic">("happy");
-  const [botSpeech, setBotSpeech] = useState("Hi! Zoe here ✨ Peeping in to help with your clinic desk!");
+  const [botSpeech, setBotSpeech] = useState("Hello! How can I help you today?");
   const [botCheekGlow, setBotCheekGlow] = useState(false);
   const [botIsFlipping, setBotIsFlipping] = useState(false);
   const [botSound, setBotSound] = useState(true);
@@ -1182,7 +1182,7 @@ export default function Home() {
     {
       id: "intro-1",
       sender: "bot",
-      text: "Hi! Zoe here ✨",
+      text: "Hello! How can I help you today?",
       time: "Just now",
     },
   ]);
@@ -1196,13 +1196,13 @@ export default function Home() {
     }
   }, [botChatMessages, botHubOpen, botIsTyping]);
 
-  // Synchronize greeting for Zoe
+  // Synchronize greeting
   useEffect(() => {
-    const greetingText = "Hi! Zoe here ✨";
-    setBotSpeech("Hi! Zoe here ✨");
+    const greetingText = "Hello! How can I help you today?";
+    setBotSpeech(greetingText);
     setBotChatMessages([
       {
-        id: "intro-zoe",
+        id: "intro-bot",
         sender: "bot",
         text: greetingText,
         time: "Just now",
@@ -1320,7 +1320,7 @@ export default function Home() {
 
   function handlePeepingBotClick() {
     triggerBotAudio("chirp");
-    setBotSpeech("Hi! Zoe here ✨");
+    setBotSpeech("Hello! How can I help you today?");
     setBotHubOpen(prev => !prev);
   }
 
@@ -1481,24 +1481,78 @@ export default function Home() {
     triggerBotAudio("chirp");
     setBotIsTyping(true);
 
-    const qLower = query.toLowerCase();
+    const qLower = query.toLowerCase().trim();
 
     setTimeout(() => {
       let botResponseText = "";
       let pdfDownloadPatientName: string | undefined = undefined;
       let rxDownloadPatientName: string | undefined = undefined;
 
-      // 1. Greeting Check: When user says hi / hello, just say hi
+      // Helper to match a patient name across patient records and appointment records
+      const findPatientMatch = (targetName?: string): RecordItem | undefined => {
+        if (!targetName) return undefined;
+        let cleaned = targetName.trim().toLowerCase().replace(/^\[|\]$/g, "");
+        if (!cleaned || cleaned === "patient name" || cleaned === "patient") return undefined;
+
+        // 1. Direct match or substring in patients
+        let found = patients.find(p => {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          if (!pName) return false;
+          return pName === cleaned || pName.includes(cleaned) || cleaned.includes(pName);
+        });
+        if (found) return found;
+
+        // 2. Token match
+        const tokens = cleaned.split(/[\s,.-]+/).filter(t => t.length >= 2);
+        if (tokens.length > 0) {
+          found = patients.find(p => {
+            const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+            if (!pName) return false;
+            const parts = pName.split(/[\s,.-]+/);
+            return tokens.some(t => parts.some(part => part === t || part.startsWith(t) || t.startsWith(part)));
+          });
+          if (found) return found;
+        }
+
+        // 3. Fallback search in raw records
+        const recMatch = records.find(r => {
+          const rName = (r.fields[COL.name] || "").toLowerCase().trim();
+          if (!rName) return false;
+          if (rName === cleaned || rName.includes(cleaned) || cleaned.includes(rName)) return true;
+          const parts = rName.split(/[\s,.-]+/);
+          return tokens.some(t => parts.some(part => part === t || part.startsWith(t) || t.startsWith(part)));
+        });
+        if (recMatch) return recMatch;
+
+        return undefined;
+      };
+
+      // Helper to detect if any registered patient's name is mentioned in the query
+      const detectMentionedPatient = (): RecordItem | undefined => {
+        for (const p of patients) {
+          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
+          if (!pName || pName.length < 2) continue;
+          if (qLower.includes(pName)) return p;
+          const parts = pName.split(/\s+/).filter(pt => pt.length >= 3);
+          if (parts.some(pt => qLower.includes(pt))) return p;
+        }
+        return undefined;
+      };
+
+      // 1. Greeting Check: Normal English greeting response
       const isGreeting =
-        /^(hi|hello|hey|greetings|hola|yo|good\s*(morning|afternoon|evening))\b/i.test(query.trim()) ||
+        /^(hi|hello|hey|greetings|howdy|sup|yo)\b/i.test(query.trim()) ||
+        qLower.startsWith("good morning") ||
+        qLower.startsWith("good afternoon") ||
+        qLower.startsWith("good evening") ||
         qLower === "hi" ||
         qLower === "hello" ||
         qLower === "hey" ||
-        qLower === "hi zoe" ||
-        qLower === "hello zoe" ||
-        qLower === "hey zoe";
+        qLower === "hi there" ||
+        qLower === "hello there" ||
+        qLower === "hey there";
 
-      // 2. What Can You Do Check: Output only the 4 task names requested
+      // 2. Capabilities Check
       const isWhatCanYouDo =
         qLower.includes("what can you do") ||
         qLower.includes("what u can do") ||
@@ -1508,103 +1562,113 @@ export default function Home() {
         qLower.includes("what you do") ||
         qLower.includes("capabilities") ||
         qLower.includes("features") ||
-        qLower === "help";
+        qLower === "help" ||
+        qLower === "options";
 
-      // 3. Patient Critical Alerts & Allergies Query Check
+      // 3. Critical Alerts & Allergies Query Check
       const isCriticalAlertsQuery =
         qLower.includes("critical alert") ||
         qLower.includes("allerg") ||
         qLower.includes("patient alert") ||
         qLower.includes("check patient critical") ||
         qLower.includes("patient critical") ||
-        qLower === "check patient critical alerts & allergies" ||
-        qLower.includes("critical alerts & allergies");
+        qLower === "check patient critical alerts & allergies";
 
-      if (isGreeting && !isWhatCanYouDo && !isCriticalAlertsQuery) {
+      // Branching logic:
+      if (isGreeting && !isWhatCanYouDo && !isCriticalAlertsQuery && !qLower.includes("rx") && !qLower.includes("report") && !qLower.includes("schedule")) {
         setBotMood("happy");
-        botResponseText = "Hi! Zoe here ✨";
+        if (qLower.startsWith("hi")) {
+          botResponseText = "Hi! How can I help you today?";
+        } else if (qLower.startsWith("hey")) {
+          botResponseText = "Hey! How can I help you today?";
+        } else if (qLower.includes("good morning")) {
+          botResponseText = "Good morning! How can I assist you with the clinic today?";
+        } else if (qLower.includes("good afternoon")) {
+          botResponseText = "Good afternoon! How can I assist you with the clinic today?";
+        } else if (qLower.includes("good evening")) {
+          botResponseText = "Good evening! How can I assist you with the clinic today?";
+        } else {
+          botResponseText = "Hello! How can I help you today?";
+        }
+      }
+      else if (
+        qLower.includes("how are you") ||
+        qLower.includes("how are u") ||
+        qLower.includes("how r u") ||
+        qLower.includes("how's it going") ||
+        qLower.includes("how is it going")
+      ) {
+        setBotMood("happy");
+        botResponseText = "I'm doing well, thank you! How can I assist you with appointments or patient records today?";
+      }
+      else if (
+        qLower.includes("who are you") ||
+        qLower.includes("what is your name") ||
+        qLower.includes("who r u") ||
+        qLower === "who are u"
+      ) {
+        setBotMood("happy");
+        botResponseText = "I'm your clinic virtual assistant. I can help you look up patient details, check appointments, generate medical reports, and draft prescriptions.";
+      }
+      else if (
+        /^(thanks|thank you|thank u|thx|many thanks)\b/i.test(query.trim()) ||
+        qLower === "thanks" ||
+        qLower === "thank you"
+      ) {
+        setBotMood("happy");
+        botResponseText = "You're welcome! Let me know if you need anything else.";
+      }
+      else if (
+        /^(bye|goodbye|see you|cya|take care)\b/i.test(query.trim()) ||
+        qLower === "bye" ||
+        qLower === "goodbye"
+      ) {
+        setBotMood("happy");
+        botResponseText = "Goodbye! Have a wonderful day ahead!";
+      }
+      else if (
+        /^(ok|okay|cool|alright|got it|sure)\b/i.test(query.trim()) ||
+        qLower === "ok" ||
+        qLower === "okay" ||
+        qLower === "cool" ||
+        qLower === "got it"
+      ) {
+        setBotMood("happy");
+        botResponseText = "Understood! Let me know whenever you need assistance.";
       }
       else if (isWhatCanYouDo) {
         setBotMood("happy");
-        botResponseText = `Hi! Zoe here ✨
-
-I can:
+        botResponseText = `I can help you with:
 • Generate patient report (PDF)
 • Draft prescription slip (Rx)
 • Check patient critical alerts & allergies
-• Show daily consultation schedule`;
+• Show daily consultation schedule
+• Look up patient records & appointment status
+• Sync live clinic database
+
+How can I help you today?`;
       }
-      // 4. Check Patient Critical Alerts & Allergies
-      else if (isCriticalAlertsQuery) {
+      else if (
+        qLower === "sync" ||
+        qLower.includes("sync records") ||
+        qLower.includes("sync data") ||
+        qLower.includes("refresh data") ||
+        qLower.includes("reload records")
+      ) {
         setBotMood("medic");
-        let matched = patients.find(p => {
-          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-          if (!pName) return false;
-          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
-        });
-
-        if (matched) {
-          const pName = matched.fields[COL.name] || "Patient";
-          const { alerts } = getPatientCriticalAlerts(matched);
-          const blood = matched.fields[COL.bloodGroup] || "Standard profile";
-          const notes = matched.fields[COL.notes] || "No adverse clinical flags documented.";
-
-          let alertSection = "";
-          if (alerts.length > 0) {
-            alertSection = alerts.map(a => `• ${a}`).join("\n");
-          } else {
-            alertSection = "• ✅ Clinical Safety Check: No adverse drug reactions or chronic alerts flagged (NKDA).";
-          }
-
-          botResponseText = `Hi! Zoe here ✨
-
-⚠️ Critical Alerts & Allergies for ${pName} (${blood}):
-${alertSection}
-
-Clinical Notes: ${notes}`;
-        } else {
-          // Summary overview across registered patients
-          const flaggedList: string[] = [];
-          const cleanList: string[] = [];
-
-          patients.forEach(p => {
-            const pName = p.fields[COL.name] || "Patient";
-            const { alerts } = getPatientCriticalAlerts(p);
-            if (alerts.length > 0) {
-              flaggedList.push(`• ⚠️ ${pName}: ${alerts.join(", ")}`);
-            } else {
-              cleanList.push(`• ✅ ${pName}: No known drug allergies (NKDA)`);
-            }
-          });
-
-          let details = "";
-          if (flaggedList.length > 0) {
-            details += `Flagged Alerts (${flaggedList.length}):\n${flaggedList.join("\n")}\n\n`;
-          }
-          if (cleanList.length > 0) {
-            details += `Verified Patient Profiles:\n${cleanList.slice(0, 6).join("\n")}`;
-          }
-
-          botResponseText = `Hi! Zoe here ✨
-
-⚠️ Patient Critical Alerts & Allergies Overview:
-${details || "All registered patient profiles verified. No adverse drug allergies flagged."}`;
-        }
-      }
-      // 5. Live Data Sync Trigger
-      else if (qLower === "sync" || qLower.includes("sync records") || qLower.includes("sync data") || qLower.includes("refresh data") || qLower.includes("reload records")) {
-        setBotMood("medic");
-        botResponseText = "Hi! Zoe here ✨ All clinic records and appointments have been synchronized live with the database!";
+        botResponseText = "All clinic records and appointments have been synchronized live with the database!";
         void handleSyncClinic();
       }
-      // 6. Doctor's Daily Consultation Schedule Brief
       else if (
         qLower.includes("schedule") ||
         qLower.includes("today's appointment") ||
         qLower.includes("daily brief") ||
         qLower.includes("my appointment") ||
         qLower.includes("my schedule") ||
-        qLower === "today"
+        qLower === "today" ||
+        qLower === "appointments" ||
+        qLower.includes("show schedule") ||
+        qLower.includes("consultation schedule")
       ) {
         setBotMood("medic");
         const docName = user?.role === "doctor" ? (user.doctorName || user.name) : undefined;
@@ -1621,11 +1685,14 @@ ${details || "All registered patient profiles verified. No adverse drug allergie
         const onlineVisits = myToday.filter(a => modeOf(a.fields) === "Online");
         const inPersonVisits = myToday.filter(a => modeOf(a.fields) !== "Online");
 
-        let scheduleDetails = "";
         if (myToday.length === 0) {
-          scheduleDetails = "• No consultations scheduled for today. Clinic roster is clear!";
+          if (appointments.length === 0) {
+            botResponseText = "Sorry, we couldn't find what you need. There are no appointments found in the clinic records.";
+          } else {
+            botResponseText = `No consultations are scheduled for today (${isoDate()}). The clinic roster is clear! (Total system appointments: ${appointments.length})`;
+          }
         } else {
-          scheduleDetails = myToday.map((a, i) => {
+          const scheduleDetails = myToday.map((a, i) => {
             const rawTime = a.fields[COL.time];
             let timeStr = "Flexible Slot";
             if (rawTime !== undefined && rawTime !== null && String(rawTime).trim() !== "") {
@@ -1647,47 +1714,28 @@ ${details || "All registered patient profiles verified. No adverse drug allergie
             const icon = mode === "Online" ? "🌐 Zoom Telehealth" : "🏥 In-Person Clinic";
             return `${i + 1}. [${timeStr}] ${pName} (${icon}) — Status: ${status}`;
           }).join("\n");
-        }
 
-        botResponseText = `Hi! Zoe here ✨
-
-📋 Doctor's Daily Consultation Schedule Brief (${isoDate()}):
+          botResponseText = `📋 Doctor's Daily Consultation Schedule Brief (${isoDate()}):
 • Total Consultations Today: ${myToday.length}
 • 🏥 In-Person Visits: ${inPersonVisits.length}
 • 🌐 Zoom Telehealth Consults: ${onlineVisits.length}
 
 Scheduled Consultations:
 ${scheduleDetails}`;
+        }
       }
-      // 7. Quick Rx Prescription Slip Drafter (NO auto-download)
       else if (
         qLower.includes("rx") ||
         qLower.includes("prescribe") ||
         qLower.includes("prescription")
       ) {
-        let matched = patients.find(p => {
-          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-          if (!pName) return false;
-          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
-        });
-
-        const rxNameMatch = query.match(/(?:rx\s+for|rx\s+of|prescription\s+for|prescription\s+of|prescribe\s+(?:.*)\s+for)\s+([a-zA-Z\s]+)/i);
+        const rxNameMatch = query.match(/(?:rx\s+for|rx\s+of|prescription\s+for|prescription\s+of|prescribe\s+(?:.*)\s+for|rx\s+|prescription\s+)\s*([a-zA-Z0-9\s'-]+)/i);
         const extractedRxName = rxNameMatch ? rxNameMatch[1].trim() : "";
-
-        if (!matched && extractedRxName) {
-          matched = patients.find(p => {
-            const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-            return pName.includes(extractedRxName.toLowerCase()) || extractedRxName.toLowerCase().includes(pName);
-          });
-        }
-
-        if (!matched && patients.length > 0) {
-          matched = patients[0];
-        }
+        const matched = findPatientMatch(extractedRxName) || detectMentionedPatient();
 
         if (matched) {
           const pName = matched.fields[COL.name] || "Patient";
-          const { allergies, alerts } = getPatientCriticalAlerts(matched);
+          const { alerts } = getPatientCriticalAlerts(matched);
           rxDownloadPatientName = pName;
           setBotMood("medic");
 
@@ -1695,37 +1743,30 @@ ${scheduleDetails}`;
             ? `⚠️ CRITICAL ALLERGY FLAG: ${alerts.join(", ")}`
             : `✅ Allergy Safety Check: No known drug allergies (NKDA) reported.`;
 
-          botResponseText = `Hi! Zoe here ✨
-
-💊 Official Prescription Slip (Rx) drafted for ${pName}:
+          botResponseText = `💊 Official Prescription Slip (Rx) drafted for ${pName}:
 ${allergyLine}
 • Standard Formulation: Amoxicillin-Clav (625mg) 1-0-1 + Paracetamol (650mg) SOS + Pantoprazole (40mg)
 • Prescribing Physician: ${user?.role === "doctor" ? (user.doctorName || user.name) : "Dr. Sarah Connor, M.D."}
 • Status: Downloadable official PDF ready below!`;
-
-          // Note: NOT auto-downloading per user request; user clicks the chat button to download.
+        } else if (extractedRxName && extractedRxName.toLowerCase() !== "patient name") {
+          setBotMood("happy");
+          botResponseText = `Sorry, we couldn't find what you need. No patient matching '${extractedRxName}' was found in the clinic records.`;
+        } else if (patients.length > 0) {
+          setBotMood("happy");
+          const sampleName = patients[0]?.fields[COL.name] || "Patient Name";
+          botResponseText = `Please specify which patient to prescribe for (e.g., 'Rx for ${sampleName}'), and I'll generate their official prescription slip with allergy checks right away!`;
         } else {
           setBotMood("happy");
-          botResponseText = `Hi! Zoe here ✨ Please specify which patient to prescribe for (e.g., 'Rx for [Patient Name]'), and I'll generate their official prescription slip with allergy checks right away!`;
+          botResponseText = "Sorry, we couldn't find what you need. There are no registered patients currently in the clinic records.";
         }
       }
-      // 8. Patient Medical Report Request with Critical Alert Flagging (NO auto-download)
-      else {
-        let matched = patients.find(p => {
-          const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-          if (!pName) return false;
-          return qLower.includes(pName) || pName.split(/\s+/).some(part => part.length >= 3 && qLower.includes(part));
-        });
-
-        const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for)\s+([a-zA-Z\s]+)/i);
+      else if (
+        qLower.includes("report") ||
+        qLower.includes("pdf")
+      ) {
+        const nameMatch = query.match(/(?:give\s+me\s+)?(?:report\s+pdf\s+of|pdf\s+of|report\s+of|report\s+for|pdf\s+for|patient\s+report\s+of|patient\s+report\s+for|medical\s+report\s+of|medical\s+report\s+for|report\s+)\s*([a-zA-Z0-9\s'-]+)/i);
         const extractedName = nameMatch ? nameMatch[1].trim() : "";
-
-        if (!matched && extractedName) {
-          matched = patients.find(p => {
-            const pName = (p.fields[COL.name] || "").toLowerCase().trim();
-            return pName.includes(extractedName.toLowerCase()) || extractedName.toLowerCase().includes(pName);
-          });
-        }
+        const matched = findPatientMatch(extractedName) || detectMentionedPatient();
 
         if (matched) {
           const pName = matched.fields[COL.name] || "Patient";
@@ -1740,20 +1781,131 @@ ${allergyLine}
             alertSection = `\n\n✅ Clinical Safety Check: No adverse drug reactions or chronic alerts flagged.`;
           }
 
-          botResponseText = `Hi! Zoe here ✨ Here is the medical report PDF for ${pName}:${alertSection}`;
-          // Note: NOT auto-downloading per user request; user clicks the chat button to download.
-        } else if (extractedName) {
+          botResponseText = `📄 Medical report PDF prepared for ${pName}:${alertSection}\n\nClick the download button below to save the official PDF report.`;
+        } else if (extractedName && extractedName.toLowerCase() !== "patient name") {
           setBotMood("happy");
-          botResponseText = `Hi! Zoe here ✨ Could not find any patient named '${extractedName}' in the clinic database. Please verify the name or click 'Sync' to refresh records.`;
-        } else if (qLower.includes("report") || qLower.includes("pdf")) {
+          botResponseText = `Sorry, we couldn't find what you need. No patient named '${extractedName}' was found in the clinic database.`;
+        } else if (patients.length > 0) {
           setBotMood("happy");
           const sampleName = patients[0]?.fields[COL.name] || "Patient Name";
-          botResponseText = `Hi! Zoe here ✨ Please specify which patient's report you'd like (e.g., 'Give me report pdf of ${sampleName}'), and I will provide their downloadable PDF report right here in chat!`;
+          botResponseText = `Please specify which patient's report you'd like (e.g., 'Give me report pdf of ${sampleName}'), and I will provide their downloadable PDF report right here in chat!`;
         } else {
-          // Default response
           setBotMood("happy");
-          botResponseText = "Hi! Zoe here ✨";
+          botResponseText = "Sorry, we couldn't find what you need. There are no registered patients currently in the clinic database.";
         }
+      }
+      else if (isCriticalAlertsQuery) {
+        setBotMood("medic");
+        const alertNameMatch = query.match(/(?:for|of)\s+([a-zA-Z0-9\s'-]+)/i);
+        const targetName = alertNameMatch ? alertNameMatch[1].trim() : "";
+        const matched = findPatientMatch(targetName) || detectMentionedPatient();
+
+        if (matched) {
+          const pName = matched.fields[COL.name] || "Patient";
+          const { alerts } = getPatientCriticalAlerts(matched);
+          const blood = matched.fields[COL.bloodGroup] || "Standard profile";
+          const notes = matched.fields[COL.notes] || "No adverse clinical flags documented.";
+
+          let alertSection = "";
+          if (alerts.length > 0) {
+            alertSection = alerts.map(a => `• ${a}`).join("\n");
+          } else {
+            alertSection = "• ✅ Clinical Safety Check: No adverse drug reactions or chronic alerts flagged (NKDA).";
+          }
+
+          botResponseText = `⚠️ Critical Alerts & Allergies for ${pName} (${blood}):
+${alertSection}
+
+Clinical Notes: ${notes}`;
+        } else if (targetName && targetName.toLowerCase() !== "all" && targetName.toLowerCase() !== "patient") {
+          setBotMood("happy");
+          botResponseText = `Sorry, we couldn't find what you need. No patient matching '${targetName}' was found in the clinic records.`;
+        } else if (patients.length > 0) {
+          const flaggedList: string[] = [];
+          const cleanList: string[] = [];
+
+          patients.forEach(p => {
+            const pName = p.fields[COL.name] || "Patient";
+            const { alerts } = getPatientCriticalAlerts(p);
+            if (alerts.length > 0) {
+              flaggedList.push(`• ⚠️ ${pName}: ${alerts.join(", ")}`);
+            } else {
+              cleanList.push(`• ✅ ${pName}: No known drug allergies (NKDA)`);
+            }
+          });
+
+          let details = "";
+          if (flaggedList.length > 0) {
+            details += `Flagged Alerts (${flaggedList.length}):\n${flaggedList.join("\n")}\n\n`;
+          }
+          if (cleanList.length > 0) {
+            details += `Verified Patient Profiles:\n${cleanList.slice(0, 6).join("\n")}`;
+          }
+
+          botResponseText = `⚠️ Patient Critical Alerts & Allergies Overview:
+${details || "All registered patient profiles verified. No adverse drug allergies flagged."}`;
+        } else {
+          setBotMood("happy");
+          botResponseText = "Sorry, we couldn't find what you need. There are no registered patients in the database to check.";
+        }
+      }
+      else if (
+        qLower.includes("doctor") ||
+        qLower.includes("specialist") ||
+        qLower.includes("physician")
+      ) {
+        setBotMood("happy");
+        const docList = doctors.length > 0 ? doctors : FALLBACK_DOCTORS.map(d => d.name);
+        botResponseText = `🩺 Clinic Specialists & Physicians (${docList.length}):
+${docList.map(d => `• ${d}`).join("\n")}`;
+      }
+      else if (
+        qLower.includes("patient") ||
+        qLower.includes("find ") ||
+        qLower.includes("lookup") ||
+        qLower.includes("who is ") ||
+        qLower.includes("details of ")
+      ) {
+        const nameMatch = query.match(/(?:who is|find|lookup|details of|details for|info for|info of|patient)\s+([a-zA-Z0-9\s'-]+)/i);
+        const searchName = nameMatch ? nameMatch[1].trim() : "";
+        const matched = findPatientMatch(searchName) || detectMentionedPatient();
+
+        if (matched) {
+          setBotMood("medic");
+          const pName = matched.fields[COL.name] || "Patient";
+          const pAppts = appointments.filter(
+            a => (a.fields[COL.name] || "").toLowerCase() === pName.toLowerCase()
+          );
+          botResponseText = `👤 Patient Profile for ${pName}:
+• Age: ${matched.fields[COL.age] || "Not recorded"} | Gender: ${matched.fields[COL.gender] || "Not recorded"}
+• Blood Group: ${matched.fields[COL.bloodGroup] || "Standard"}
+• Phone: ${matched.fields[COL.phone] || "Not provided"}
+• Email: ${matched.fields[COL.email] || "Not provided"}
+• Appointments: ${pAppts.length} consultation(s)
+• Medical Notes: ${matched.fields[COL.notes] || "No notes documented"}`;
+        } else {
+          setBotMood("happy");
+          botResponseText = "Sorry, we couldn't find what you need. No patient record matching that query was found.";
+        }
+      }
+      else if (
+        qLower.includes("stats") ||
+        qLower.includes("summary") ||
+        qLower.includes("overview") ||
+        qLower.includes("how many")
+      ) {
+        setBotMood("happy");
+        botResponseText = `📊 Clinic Overview:
+• Total Registered Patients: ${patients.length}
+• Total Appointments: ${appointments.length}
+• Today's Consultations: ${todayAppointments.length}
+• Completed Visits: ${completedCount}
+• Online Telehealth: ${onlineUpcoming.length}`;
+      }
+      else {
+        // Fallback for any other queries / data not found
+        setBotMood("happy");
+        botResponseText = "Sorry, we couldn't find what you need. Please ask about patient reports, prescriptions, schedules, or alerts, or try syncing clinic data.";
       }
 
       const botMsg: BotChatMessage = {
@@ -1766,7 +1918,7 @@ ${allergyLine}
       };
 
       setBotChatMessages((prev) => [...prev, botMsg]);
-      setBotSpeech(botResponseText.split("\n")[0] || "Hi! Zoe here ✨");
+      setBotSpeech(botResponseText.split("\n")[0] || "Hello! How can I help you today?");
       setBotIsTyping(false);
       triggerBotAudio("purr");
     }, 380);
