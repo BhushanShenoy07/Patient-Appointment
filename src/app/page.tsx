@@ -4223,8 +4223,8 @@ interface ArtTaskLog {
                     const isOnline = modeOf(r.fields) === "Online";
                     const isCompleted = low(r.fields[COL.status]) === "completed";
                     const isCancelled = low(r.fields[COL.status]) === "cancelled";
-                    const zoomUrl = r.fields[COL.zoomUrl];
                     const zoomId = r.fields[COL.zoomId];
+                    const zoomUrl = r.fields[COL.zoomUrl] || (zoomId ? `https://zoom.us/j/${zoomId}?pwd=CLINIC` : "");
 
                     return (
                       <article className="appointment-item-card" key={r.id}>
@@ -4328,6 +4328,28 @@ interface ArtTaskLog {
                                 <span>✓</span>
                                 <span>Complete Consultation</span>
                               </button>
+                            )}
+                            {isDoctorRole && isOnline && zoomUrl && !isCancelled && (
+                              <a
+                                href={zoomUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="action-sub-btn"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  backgroundColor: "var(--primary-600, #0284c7)",
+                                  color: "#ffffff",
+                                  borderColor: "var(--primary-600, #0284c7)",
+                                  textDecoration: "none",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <IconVideo size={12} />
+                                <span>Join Zoom</span>
+                                <IconExternal size={11} />
+                              </a>
                             )}
                             {!isDoctorRole && (
                               <>
