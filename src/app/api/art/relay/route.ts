@@ -17,8 +17,20 @@ declare global {
   var __clinicMessageQueue: RelayMessage[] | undefined;
 }
 
+function isRealAppointmentAlert(event: string, content: any): boolean {
+  if (event === "clinic_message") return true;
+  if (event === "appointment" || event === "clinic_appointment") {
+    const pName = String(content?.name || content?.patientName || "").trim();
+    if (!pName || pName === "Patient Consultation" || pName.toLowerCase() === "patient") {
+      return false;
+    }
+    return Boolean(content?.date || content?.time || content?.doctor || content?.phone);
+  }
+  return false;
+}
+
 globalThis.__clinicMessageQueue = (globalThis.__clinicMessageQueue ?? []).filter(
-  m => m.event === "clinic_message"
+  m => isRealAppointmentAlert(m.event, m.content)
 );
 const messageQueue: RelayMessage[] = (globalThis.__clinicMessageQueue ??= []);
 
@@ -39,14 +51,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Do NOT store appointment alert notices in persistent broadcast relay
-    const isApptAlert =
-      event === "appointment" ||
-      event === "clinic_appointment" ||
-      event === "send_sms" ||
-      event === "notification";
-
-    if (event !== "clinic_presence" && !isApptAlert) {
+    // Queue valid staff chat messages AND genuine receptionist-sent appointment notifications with full details
+    if (event !== "clinic_presence" && isRealAppointmentAlert(event, content)) {
       const msg: RelayMessage = {
         id,
         event,
@@ -77,16 +83,10 @@ export async function GET(request: Request) {
     recordHeartbeat(username);
   }
 
-  // Filter messages for this user; only replay genuine staff chat messages, never dummy or appointment alerts
+  // Filter messages for this user; deliver valid chat messages and real appointment alerts directed to this user
   const messages = messageQueue.filter(m => {
     if (m.timestamp <= since) return false;
-    if (
-      m.event === "appointment" ||
-      m.event === "clinic_appointment" ||
-      m.event === "send_sms" ||
-      m.event === "notification" ||
-      m.event !== "clinic_message"
-    ) return false;
+    if (!isRealAppointmentAlert(m.event, m.content)) return false;
     if (!m.to) return true; // broadcast
     return m.to === username || m.from === username;
   });

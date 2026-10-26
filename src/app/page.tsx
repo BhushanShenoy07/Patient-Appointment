@@ -2269,6 +2269,9 @@ interface ArtTaskLog {
     } catch {
       // fallback
     }
+    if (!self && user?.artUsername) {
+      self = user.artUsername;
+    }
     const m: ArtMessage = {
       id: crypto.randomUUID(),
       at: new Date().toISOString(),
@@ -2278,8 +2281,9 @@ interface ArtTaskLog {
       content: {
         ...payload,
         doctor: payload.doctor,
-        from: self,
-        fromName: user?.doctorName || user?.name,
+        from: self || "vrushali",
+        to: artUsername,
+        fromName: user?.doctorName || user?.name || "Reception Desk",
       },
       status: "sending",
       read: true,
@@ -2477,14 +2481,21 @@ interface ArtTaskLog {
         return;
       }
 
+      const senderPeer = String(content?.from || "").trim() || "vrushali";
+
       addMessage({
         id: typeof content?.id === "string" ? content.id : crypto.randomUUID(),
         direction: "in",
-        peer: String(content?.from || ""),
+        peer: senderPeer,
         event: "appointment",
         content: content || {},
-        read: String(content?.from || "").toLowerCase() === activePeerRef.current.toLowerCase(),
+        read: senderPeer.toLowerCase() === activePeerRef.current.toLowerCase(),
       });
+
+      if (user?.role === "doctor") {
+        setToast(`🔔 New Appointment Alert: ${patientName} (${content?.date || ""} ${content?.time || ""})`);
+        triggerBotAudio("chirp");
+      }
     });
     const offPresence = onPresence(online => {
       setOnlineUsers(online);
